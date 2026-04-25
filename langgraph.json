@@ -1,0 +1,6 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "mercury": "./mercury/graph/agent.py:graph"
+  }
+}
