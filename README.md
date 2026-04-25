@@ -37,6 +37,18 @@ The service provides `GET /healthz`, `GET /readyz`, and native
 `POST /v1/mercury/invoke`. Readiness validates local configuration and the static
 chain registry only; it does not fetch wallet private keys.
 
+## pan-agentikit Agent Boundary
+
+Phase 10 adds `POST /v1/agent` for pan-agentikit-compatible envelopes while keeping
+the native `/v1/mercury/invoke` contract unchanged. Mercury accepts `UserMessageV1`
+and `TaskRequestV1` payloads, maps them into the same graph, policy, approval,
+signing, and broadcast pipeline as native requests, and returns `AgentReplyV1`,
+`TaskResultV1`, `WalletApprovalRequiredV1`, or sanitized `AgentErrorV1` envelopes.
+
+Envelope metadata such as `trace_id`, `turn_id`, roles, parent step IDs, artifacts,
+and idempotency keys is preserved across the adapter boundary. Value-moving task
+requests must include an idempotency key before Mercury will invoke the graph.
+
 ## Local Configuration
 
 Copy `.env.example` to `.env` only when local overrides are needed. The default settings
