@@ -25,6 +25,18 @@ uv run pytest
 uv run ruff check .
 ```
 
+## Local FastAPI Service
+
+Phase 9 exposes the native Mercury HTTP boundary. Run it locally with:
+
+```bash
+uv run uvicorn mercury.service.api:app --reload
+```
+
+The service provides `GET /healthz`, `GET /readyz`, and native
+`POST /v1/mercury/invoke`. Readiness validates local configuration and the static
+chain registry only; it does not fetch wallet private keys.
+
 ## Local Configuration
 
 Copy `.env.example` to `.env` only when local overrides are needed. The default settings
