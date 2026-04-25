@@ -1,14 +1,16 @@
-"""Static chain registry for Phase 1."""
+"""Static chain registry with 1Claw RPC secret metadata."""
 
+from mercury.config import get_settings
 from mercury.models.chain import ChainConfig
 
 DEFAULT_CHAIN_NAME = "ethereum"
+_settings = get_settings()
 
 ETHEREUM = ChainConfig(
     name="ethereum",
     chain_id=1,
     native_symbol="ETH",
-    rpc_secret_ref="MERCURY_ETHEREUM_RPC_URL",
+    rpc_secret_path=_settings.ethereum_rpc_secret_path,
     block_explorer_url="https://etherscan.io",
 )
 
@@ -16,7 +18,7 @@ BASE = ChainConfig(
     name="base",
     chain_id=8453,
     native_symbol="ETH",
-    rpc_secret_ref="MERCURY_BASE_RPC_URL",
+    rpc_secret_path=_settings.base_rpc_secret_path,
     block_explorer_url="https://basescan.org",
 )
 

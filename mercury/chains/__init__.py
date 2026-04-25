@@ -10,6 +10,7 @@ from mercury.chains.registry import (
     get_default_chain,
     list_chains,
 )
+from mercury.chains.rpc import resolve_rpc_url
 
 __all__ = [
     "BASE",
@@ -20,4 +21,5 @@ __all__ = [
     "get_chain_by_name",
     "get_default_chain",
     "list_chains",
+    "resolve_rpc_url",
 ]

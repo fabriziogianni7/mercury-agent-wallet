@@ -16,7 +16,7 @@ class ChainConfig(ChainReference):
     """Static metadata for a supported EVM chain."""
 
     native_symbol: str = Field(min_length=1)
-    rpc_secret_ref: str = Field(min_length=1)
+    rpc_secret_path: str = Field(min_length=1)
     block_explorer_url: str = Field(min_length=1)
 
     def to_reference(self) -> ChainReference:

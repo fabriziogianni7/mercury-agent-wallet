@@ -13,6 +13,7 @@ def test_resolves_ethereum_by_name() -> None:
     assert chain.name == "ethereum"
     assert chain.chain_id == 1
     assert chain.native_symbol == "ETH"
+    assert chain.rpc_secret_path == "mercury/rpc/ethereum"
 
 
 def test_resolves_base_by_name() -> None:
@@ -21,6 +22,7 @@ def test_resolves_base_by_name() -> None:
     assert chain.name == "base"
     assert chain.chain_id == 8453
     assert chain.native_symbol == "ETH"
+    assert chain.rpc_secret_path == "mercury/rpc/base"
 
 
 def test_resolves_ethereum_by_chain_id() -> None:
