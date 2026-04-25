@@ -15,7 +15,6 @@ def test_graph_compiles_successfully() -> None:
 def test_basic_invocation_returns_placeholder_response() -> None:
     result = graph.invoke({"messages": [HumanMessage(content="Can you check my ETH balance?")]})
 
-    assert result["chain_reference"].name == "ethereum"
-    assert result["read_result"]["intent_parser"] == "placeholder"
     assert isinstance(result["messages"][-1], AIMessage)
-    assert "Phase 1 foundation" in result["messages"][-1].content
+    assert result["parsed_intent"]["kind"] == "unsupported"
+    assert "structured read-only intent" in result["messages"][-1].content

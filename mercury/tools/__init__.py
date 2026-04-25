@@ -14,6 +14,7 @@ from mercury.tools.evm import (
     get_native_balance,
     read_contract,
 )
+from mercury.tools.registry import ReadOnlyToolRegistry
 from mercury.tools.schemas import (
     ContractReadInput,
     ContractReadOutput,
@@ -48,6 +49,8 @@ __all__ = [
     "ERC20MetadataOutput",
     "NativeBalanceInput",
     "NativeBalanceOutput",
+    "ProviderFactoryLike",
+    "ReadOnlyToolRegistry",
     "create_erc20_tools",
     "create_evm_tools",
     "create_readonly_tools",

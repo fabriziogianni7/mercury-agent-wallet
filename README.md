@@ -67,3 +67,30 @@ tools = create_readonly_tools(provider_factory)
 The Phase 3 surface is read-only: native balances, ERC20 metadata, ERC20 balances,
 ERC20 allowances, and generic view/pure contract calls. It does not retrieve private
 keys, sign, approve, transfer, swap, or send transactions.
+
+## Read-Only Graph Invocation
+
+Phase 4 wires the read-only tools into LangGraph for structured wallet-read intents.
+Ethereum is the default chain, and Base can be selected explicitly.
+
+```python
+from mercury.graph import build_graph
+from mercury.tools import ReadOnlyToolRegistry, create_readonly_tools
+
+registry = ReadOnlyToolRegistry(create_readonly_tools(provider_factory))
+graph = build_graph(registry).compile()
+
+result = graph.invoke(
+    {
+        "raw_input": {
+            "kind": "native_balance",
+            "wallet_address": "0x000000000000000000000000000000000000dEaD",
+        }
+    }
+)
+```
+
+Supported structured `kind` values are `native_balance`, `erc20_balance`,
+`erc20_allowance`, `erc20_metadata`, and `contract_read`. Value-moving requests such
+as approvals, transfers, swaps, signing, and transaction submission remain out of
+scope.
