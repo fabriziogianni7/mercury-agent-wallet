@@ -19,6 +19,7 @@ ROUTE_CHECK_IDEMPOTENCY = "check_idempotency"
 ROUTE_RESOLVE_NONCE = "resolve_nonce"
 ROUTE_SIGN_TRANSACTION = "sign_transaction"
 ROUTE_PREPARE_ERC20_TRANSACTION = "prepare_erc20_transaction"
+ROUTE_PREPARE_SWAP_TRANSACTION = "prepare_swap_transaction"
 
 _READ_ROUTES = {
     ReadOnlyIntentKind.NATIVE_BALANCE.value: ROUTE_NATIVE_BALANCE,

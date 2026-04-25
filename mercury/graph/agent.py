@@ -17,6 +17,12 @@ from mercury.graph.nodes_erc20 import (
     route_after_erc20_prepare,
     route_erc20_intent,
 )
+from mercury.graph.nodes_swaps import (
+    SwapGraphDependencies,
+    make_swap_prepare_node,
+    route_after_swap_prepare,
+    route_swap_intent,
+)
 from mercury.graph.nodes_transaction import (
     TransactionGraphDependencies,
     make_approval_node,
@@ -39,6 +45,7 @@ from mercury.graph.router import (
     ROUTE_FORMAT_RESPONSE,
     ROUTE_NATIVE_BALANCE,
     ROUTE_PREPARE_ERC20_TRANSACTION,
+    ROUTE_PREPARE_SWAP_TRANSACTION,
     ROUTE_REJECT_TRANSACTION,
     ROUTE_REQUEST_APPROVAL,
     ROUTE_RESOLVE_CHAIN,
@@ -155,6 +162,38 @@ def build_erc20_transaction_graph(
     builder.add_conditional_edges(
         "prepare_erc20_transaction",
         route_after_erc20_prepare,
+        {
+            ROUTE_REJECT_TRANSACTION: "reject_transaction",
+            ROUTE_RESOLVE_NONCE: "resolve_nonce",
+        },
+    )
+    builder.add_edge("unsupported_response", END)
+
+    return builder
+
+
+def build_swap_transaction_graph(
+    swap_deps: SwapGraphDependencies,
+    transaction_deps: TransactionGraphDependencies,
+) -> StateGraph[MercuryState]:
+    """Build a swap preparation graph that feeds the generic transaction pipeline."""
+
+    builder = StateGraph(MercuryState)
+    builder.add_node("prepare_swap_transaction", cast(Any, make_swap_prepare_node(swap_deps)))
+    builder.add_node("unsupported_response", unsupported_response)
+    _add_transaction_pipeline(builder, transaction_deps)
+
+    builder.add_conditional_edges(
+        START,
+        route_swap_intent,
+        {
+            ROUTE_PREPARE_SWAP_TRANSACTION: "prepare_swap_transaction",
+            ROUTE_UNSUPPORTED: "unsupported_response",
+        },
+    )
+    builder.add_conditional_edges(
+        "prepare_swap_transaction",
+        route_after_swap_prepare,
         {
             ROUTE_REJECT_TRANSACTION: "reject_transaction",
             ROUTE_RESOLVE_NONCE: "resolve_nonce",

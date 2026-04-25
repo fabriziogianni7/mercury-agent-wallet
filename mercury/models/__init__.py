@@ -38,6 +38,7 @@ from mercury.models.intents import (
     NativeBalanceIntent,
     PlaceholderTransactionIntent,
     ReadContractIntent,
+    SwapIntent,
     WalletIntent,
 )
 from mercury.models.policy import PolicyDecision, PolicyDecisionStatus
@@ -48,6 +49,20 @@ from mercury.models.signing import (
     SignTypedDataRequest,
 )
 from mercury.models.simulation import SimulationResult, SimulationStatus
+from mercury.models.swaps import (
+    SwapEVMTransaction,
+    SwapExecution,
+    SwapExecutionType,
+    SwapProviderName,
+    SwapQuote,
+    SwapQuoteRequest,
+    SwapRoute,
+    SwapRouteKind,
+    SwapTypedOrder,
+)
+from mercury.models.swaps import (
+    SwapIntent as SwapActionIntent,
+)
 from mercury.models.transactions import (
     PreparedEVMTransaction,
     TransactionReference,
@@ -88,6 +103,17 @@ __all__ = [
     "SignedTypedDataResult",
     "SignTransactionRequest",
     "SignTypedDataRequest",
+    "SwapActionIntent",
+    "SwapEVMTransaction",
+    "SwapExecution",
+    "SwapExecutionType",
+    "SwapIntent",
+    "SwapProviderName",
+    "SwapQuote",
+    "SwapQuoteRequest",
+    "SwapRoute",
+    "SwapRouteKind",
+    "SwapTypedOrder",
     "TransactionReference",
     "TransactionReceipt",
     "UnsignedTransaction",

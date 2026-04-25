@@ -11,6 +11,11 @@ from mercury.policy.rules import (
     simulation_failure_reason,
     unsupported_chain_reason,
 )
+from mercury.policy.swap_rules import (
+    SwapPolicyConfig,
+    swap_approval_reason,
+    swap_transaction_policy_reason,
+)
 
 
 class TransactionPolicyEngine:
@@ -22,10 +27,12 @@ class TransactionPolicyEngine:
         max_gas_limit: int | None = None,
         reject_unlimited_erc20_approvals: bool = True,
         reject_erc20_self_transfers: bool = True,
+        swap_policy_config: SwapPolicyConfig | None = None,
     ) -> None:
         self._max_gas_limit = max_gas_limit
         self._reject_unlimited_erc20_approvals = reject_unlimited_erc20_approvals
         self._reject_erc20_self_transfers = reject_erc20_self_transfers
+        self._swap_policy_config = swap_policy_config or SwapPolicyConfig()
 
     def evaluate(
         self,
@@ -44,6 +51,7 @@ class TransactionPolicyEngine:
                 reject_unlimited_approvals=self._reject_unlimited_erc20_approvals,
                 reject_self_transfers=self._reject_erc20_self_transfers,
             ),
+            swap_transaction_policy_reason(transaction, config=self._swap_policy_config),
         ):
             if reason is not None:
                 return PolicyDecision(status=PolicyDecisionStatus.REJECTED, reason=reason)
@@ -51,6 +59,9 @@ class TransactionPolicyEngine:
         erc20_reason = erc20_approval_reason(transaction)
         if erc20_reason is not None:
             return PolicyDecision(status=PolicyDecisionStatus.NEEDS_APPROVAL, reason=erc20_reason)
+        swap_reason = swap_approval_reason(transaction)
+        if swap_reason is not None:
+            return PolicyDecision(status=PolicyDecisionStatus.NEEDS_APPROVAL, reason=swap_reason)
 
         if transaction.is_value_moving:
             return PolicyDecision(

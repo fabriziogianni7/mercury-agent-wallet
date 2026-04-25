@@ -37,6 +37,13 @@ from mercury.tools.schemas import (
     NativeBalanceInput,
     NativeBalanceOutput,
 )
+from mercury.tools.swaps import (
+    PreparedSwap,
+    SwapAllowanceCheck,
+    check_swap_allowance,
+    prepare_swap,
+    prepared_swap_transaction_from_execution,
+)
 
 
 def create_readonly_tools(provider_factory: ProviderFactoryLike) -> list[BaseTool]:
@@ -62,7 +69,10 @@ __all__ = [
     "NativeBalanceInput",
     "NativeBalanceOutput",
     "ProviderFactoryLike",
+    "PreparedSwap",
     "ReadOnlyToolRegistry",
+    "SwapAllowanceCheck",
+    "check_swap_allowance",
     "create_erc20_tools",
     "create_evm_tools",
     "create_readonly_tools",
@@ -76,5 +86,7 @@ __all__ = [
     "get_native_balance",
     "prepare_erc20_approval",
     "prepare_erc20_transfer",
+    "prepare_swap",
+    "prepared_swap_transaction_from_execution",
     "read_contract",
 ]

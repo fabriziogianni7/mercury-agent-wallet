@@ -90,7 +90,36 @@ result = graph.invoke(
 )
 ```
 
-Supported structured `kind` values are `native_balance`, `erc20_balance`,
-`erc20_allowance`, `erc20_metadata`, and `contract_read`. Value-moving requests such
-as approvals, transfers, swaps, signing, and transaction submission remain out of
-scope.
+Supported structured read-only `kind` values are `native_balance`, `erc20_balance`,
+`erc20_allowance`, `erc20_metadata`, and `contract_read`.
+
+## Swap Preparation
+
+Phase 8 adds normalized swap providers for LiFi, CoW Swap, and Uniswap. Provider API
+keys are optional, but when configured they are resolved only through 1Claw paths:
+`mercury/apis/lifi`, `mercury/apis/cowswap`, and `mercury/apis/uniswap`.
+
+Swap graph execution prepares the next safe transaction only. If allowance is
+insufficient, Mercury prepares an ERC20 approval transaction first. If allowance is
+sufficient, the provider-built swap transaction is policy-checked and then fed into
+the same transaction pipeline used for ERC20 transfers: nonce, gas, simulation,
+policy, human approval, idempotency, signer boundary, broadcast, and receipt
+monitoring.
+
+```python
+result = graph.invoke(
+    {
+        "raw_input": {
+            "kind": "swap",
+            "chain": "base",
+            "wallet_id": "primary",
+            "from_token": "0x000000000000000000000000000000000000cafE",
+            "to_token": "0x000000000000000000000000000000000000dEaD",
+            "amount_in": "10",
+            "max_slippage_bps": 50,
+            "provider_preference": "lifi",
+            "idempotency_key": "swap-base-usdc-1",
+        }
+    }
+)
+```

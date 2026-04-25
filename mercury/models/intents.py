@@ -19,6 +19,7 @@ class IntentKind(StrEnum):
     PREPARE_TRANSACTION = "prepare_transaction"
     ERC20_TRANSFER = "erc20_transfer"
     ERC20_APPROVAL = "erc20_approval"
+    SWAP = "swap"
 
 
 class BaseWalletIntent(BaseModel):
@@ -106,6 +107,34 @@ class ERC20ApprovalIntent(BaseWalletIntent):
         return normalize_evm_address(value)
 
 
+class SwapIntent(BaseWalletIntent):
+    """Intent to prepare a swap through the transaction pipeline."""
+
+    kind: Literal[IntentKind.SWAP] = IntentKind.SWAP
+    wallet_id: str = Field(min_length=1)
+    chain: str = Field(min_length=1)
+    from_token: Address
+    to_token: Address
+    amount_in: str = Field(min_length=1)
+    min_amount_out: str | None = Field(default=None, min_length=1)
+    max_slippage_bps: int | None = Field(default=None, ge=0, le=10_000)
+    provider_preference: str | None = Field(default=None, min_length=1)
+    recipient_address: Address | None = None
+    idempotency_key: str = Field(min_length=1)
+
+    @field_validator("chain")
+    @classmethod
+    def normalize_chain(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("from_token", "to_token", "recipient_address")
+    @classmethod
+    def normalize_address(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_evm_address(value)
+
+
 type WalletIntent = (
     ReadContractIntent
     | NativeBalanceIntent
@@ -113,4 +142,5 @@ type WalletIntent = (
     | PlaceholderTransactionIntent
     | ERC20TransferIntent
     | ERC20ApprovalIntent
+    | SwapIntent
 )

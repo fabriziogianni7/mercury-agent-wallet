@@ -10,6 +10,7 @@ from mercury.models.approval import ApprovalResult
 from mercury.models.execution import ExecutableTransaction, ExecutionResult, PreparedTransaction
 from mercury.models.signing import SignedTransactionResult
 from mercury.models.simulation import SimulationResult
+from mercury.tools.swaps import PreparedSwap
 
 
 class MercuryState(TypedDict, total=False):
@@ -30,6 +31,7 @@ class MercuryState(TypedDict, total=False):
     read_result: dict[str, Any]
     policy_decision: PolicyDecision
     prepared_transaction: PreparedTransaction | dict[str, Any]
+    prepared_swap: PreparedSwap
     executable_transaction: ExecutableTransaction
     simulation_result: SimulationResult
     approval_result: ApprovalResult
