@@ -11,17 +11,37 @@ from mercury.graph.nodes import (
     resolve_chain,
     unsupported_response,
 )
+from mercury.graph.nodes_transaction import (
+    TransactionGraphDependencies,
+    make_approval_node,
+    make_broadcast_transaction_node,
+    make_idempotency_node,
+    make_monitor_receipt_node,
+    make_policy_node,
+    make_populate_gas_node,
+    make_resolve_nonce_node,
+    make_sign_transaction_node,
+    make_simulate_transaction_node,
+    reject_transaction,
+)
 from mercury.graph.router import (
+    ROUTE_CHECK_IDEMPOTENCY,
     ROUTE_CONTRACT_READ,
     ROUTE_ERC20_ALLOWANCE,
     ROUTE_ERC20_BALANCE,
     ROUTE_ERC20_METADATA,
     ROUTE_FORMAT_RESPONSE,
     ROUTE_NATIVE_BALANCE,
+    ROUTE_REJECT_TRANSACTION,
+    ROUTE_REQUEST_APPROVAL,
     ROUTE_RESOLVE_CHAIN,
+    ROUTE_SIGN_TRANSACTION,
     ROUTE_UNSUPPORTED,
     route_after_chain,
+    route_after_idempotency,
     route_after_parse,
+    route_after_transaction_approval,
+    route_after_transaction_policy,
 )
 from mercury.graph.state import MercuryState
 from mercury.tools.registry import ReadOnlyToolRegistry
@@ -90,6 +110,58 @@ def build_graph(registry: ReadOnlyToolRegistry | None = None) -> StateGraph[Merc
     builder.add_edge("read_contract", "format_response")
     builder.add_edge("unsupported_response", END)
     builder.add_edge("format_response", END)
+
+    return builder
+
+
+def build_transaction_graph(deps: TransactionGraphDependencies) -> StateGraph[MercuryState]:
+    """Build the uncompiled generic value-moving transaction graph."""
+
+    builder = StateGraph(MercuryState)
+    builder.add_node("resolve_nonce", cast(Any, make_resolve_nonce_node(deps)))
+    builder.add_node("populate_gas", cast(Any, make_populate_gas_node(deps)))
+    builder.add_node("simulate_transaction", cast(Any, make_simulate_transaction_node(deps)))
+    builder.add_node("evaluate_policy", cast(Any, make_policy_node(deps)))
+    builder.add_node("request_approval", cast(Any, make_approval_node(deps)))
+    builder.add_node("check_idempotency", cast(Any, make_idempotency_node(deps)))
+    builder.add_node("sign_transaction", cast(Any, make_sign_transaction_node(deps)))
+    builder.add_node("broadcast_transaction", cast(Any, make_broadcast_transaction_node(deps)))
+    builder.add_node("monitor_receipt", cast(Any, make_monitor_receipt_node(deps)))
+    builder.add_node("reject_transaction", reject_transaction)
+
+    builder.add_edge(START, "resolve_nonce")
+    builder.add_edge("resolve_nonce", "populate_gas")
+    builder.add_edge("populate_gas", "simulate_transaction")
+    builder.add_edge("simulate_transaction", "evaluate_policy")
+    builder.add_conditional_edges(
+        "evaluate_policy",
+        route_after_transaction_policy,
+        {
+            ROUTE_REJECT_TRANSACTION: "reject_transaction",
+            ROUTE_REQUEST_APPROVAL: "request_approval",
+            ROUTE_CHECK_IDEMPOTENCY: "check_idempotency",
+        },
+    )
+    builder.add_conditional_edges(
+        "request_approval",
+        route_after_transaction_approval,
+        {
+            ROUTE_REJECT_TRANSACTION: "reject_transaction",
+            ROUTE_CHECK_IDEMPOTENCY: "check_idempotency",
+        },
+    )
+    builder.add_conditional_edges(
+        "check_idempotency",
+        route_after_idempotency,
+        {
+            ROUTE_REJECT_TRANSACTION: "reject_transaction",
+            ROUTE_SIGN_TRANSACTION: "sign_transaction",
+        },
+    )
+    builder.add_edge("sign_transaction", "broadcast_transaction")
+    builder.add_edge("broadcast_transaction", "monitor_receipt")
+    builder.add_edge("monitor_receipt", END)
+    builder.add_edge("reject_transaction", END)
 
     return builder
 

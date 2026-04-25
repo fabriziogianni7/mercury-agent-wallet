@@ -6,6 +6,10 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 from mercury.models import ChainConfig, ChainReference, PolicyDecision, WalletIntent
+from mercury.models.approval import ApprovalResult
+from mercury.models.execution import ExecutableTransaction, ExecutionResult, PreparedTransaction
+from mercury.models.signing import SignedTransactionResult
+from mercury.models.simulation import SimulationResult
 
 
 class MercuryState(TypedDict, total=False):
@@ -25,4 +29,12 @@ class MercuryState(TypedDict, total=False):
     intent: WalletIntent
     read_result: dict[str, Any]
     policy_decision: PolicyDecision
+    prepared_transaction: PreparedTransaction | dict[str, Any]
+    executable_transaction: ExecutableTransaction
+    simulation_result: SimulationResult
+    approval_result: ApprovalResult
+    signed_transaction: SignedTransactionResult
+    tx_hash: str
+    execution_result: ExecutionResult
+    wallet_address: str
     error: str
