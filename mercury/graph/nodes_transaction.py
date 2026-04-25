@@ -303,9 +303,7 @@ def reject_transaction(state: MercuryState) -> MercuryState:
         return {}
     decision = state.get("policy_decision")
     reason = (
-        decision.reason
-        if decision is not None
-        else state.get("error", "Transaction rejected.")
+        decision.reason if decision is not None else state.get("error", "Transaction rejected.")
     )
     return {
         "execution_result": _result_from_state(
@@ -360,9 +358,7 @@ def _result_from_state(
     chain = transaction.chain if isinstance(transaction, ExecutableTransaction) else "unknown"
     chain_id = transaction.chain_id if isinstance(transaction, ExecutableTransaction) else 1
     wallet_id = (
-        transaction.wallet_id
-        if isinstance(transaction, ExecutableTransaction)
-        else "unknown"
+        transaction.wallet_id if isinstance(transaction, ExecutableTransaction) else "unknown"
     )
     if isinstance(prepared, PreparedTransaction):
         chain = prepared.chain

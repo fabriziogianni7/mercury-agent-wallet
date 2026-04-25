@@ -145,9 +145,7 @@ def envelope_from_mercury_response(
 
     if native_response.error is not None or native_response.status in {"failed", "rejected"}:
         message = (
-            native_response.error.message
-            if native_response.error
-            else native_response.message
+            native_response.error.message if native_response.error else native_response.message
         )
         code = native_response.error.code if native_response.error else None
         return error_envelope(
@@ -444,15 +442,15 @@ def _result_payload(response: MercuryInvokeResponse) -> dict[str, Any]:
     return cast(
         dict[str, Any],
         redact_value(
-        {
-            "request_id": response.request_id,
-            "status": response.status,
-            "chain": response.chain,
-            "data": response.data,
-            "tx_hash": response.tx_hash,
-            "receipt": response.receipt,
-            "approval_required": response.approval_required,
-        }
+            {
+                "request_id": response.request_id,
+                "status": response.status,
+                "chain": response.chain,
+                "data": response.data,
+                "tx_hash": response.tx_hash,
+                "receipt": response.receipt,
+                "approval_required": response.approval_required,
+            }
         ),
     )
 

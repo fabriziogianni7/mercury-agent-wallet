@@ -71,4 +71,3 @@ class InMemoryIdempotencyStore:
             )
             self._records[key] = record
             return record
-

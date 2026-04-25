@@ -13,6 +13,7 @@ from mercury.models.swaps import (
 from mercury.models.wallets import WalletAddressResult
 from mercury.swaps.router import SwapRouter
 from mercury.tools.swaps import prepare_swap
+
 from tests.test_evm_read_tools import FakeEth, FakeProviderFactory, FakeWeb3
 
 TOKEN_IN = "0x000000000000000000000000000000000000cafE"
@@ -100,7 +101,7 @@ def _intent() -> SwapIntent:
         to_token=TOKEN_OUT,
         amount_in="1.5",
         max_slippage_bps=50,
-        provider_preference="lifi",
+        provider_preference=SwapProviderName.LIFI,
         idempotency_key="swap-1",
     )
 

@@ -29,8 +29,7 @@ def test_invoke_redacts_secret_like_graph_state_errors() -> None:
         {
             "chain_name": "ethereum",
             "error": (
-                "failed using https://rpc.example.invalid and "
-                "mercury/wallets/primary/private_key"
+                "failed using https://rpc.example.invalid and mercury/wallets/primary/private_key"
             ),
         }
     )
@@ -54,9 +53,7 @@ def test_invoke_redacts_secret_like_graph_state_errors() -> None:
 
 
 def test_invoke_graph_exception_maps_to_sanitized_error() -> None:
-    runtime = RaisingRuntime(
-        RuntimeError("boom https://rpc.example.invalid bearer=secret-token")
-    )
+    runtime = RaisingRuntime(RuntimeError("boom https://rpc.example.invalid bearer=secret-token"))
     client = TestClient(create_app(runtime=runtime), raise_server_exceptions=False)
 
     response = client.post(

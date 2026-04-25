@@ -6,6 +6,7 @@ from mercury.service.pan_agentikit_handler import (
     mercury_request_from_envelope,
 )
 from mercury.service.pan_agentikit_models import PanAgentEnvelope
+
 from tests.fixtures.pan_agentikit_envelopes import envelope_fixture
 
 
@@ -101,8 +102,7 @@ def test_graph_state_error_maps_to_sanitized_error_envelope() -> None:
         {
             "chain_name": "base",
             "error": (
-                "failed using https://rpc.example.invalid and "
-                "mercury/wallets/primary/private_key"
+                "failed using https://rpc.example.invalid and mercury/wallets/primary/private_key"
             ),
         }
     )

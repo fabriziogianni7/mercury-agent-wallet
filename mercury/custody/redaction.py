@@ -7,12 +7,8 @@ import re
 REDACTION = "<redacted>"
 
 _HEX_PRIVATE_KEY_PATTERN = re.compile(r"\b(?:0x)?[a-fA-F0-9]{64}\b")
-_WALLET_PRIVATE_KEY_PATH_PATTERN = re.compile(
-    r"\bmercury/wallets/[A-Za-z0-9_.-]+/private_key\b"
-)
-_ONECLAW_TOKEN_PATTERN = re.compile(
-    r"(?i)\b(?:oneclaw|1claw|api[_-]?key|bearer)\s*[:=]\s*\S+"
-)
+_WALLET_PRIVATE_KEY_PATH_PATTERN = re.compile(r"\bmercury/wallets/[A-Za-z0-9_.-]+/private_key\b")
+_ONECLAW_TOKEN_PATTERN = re.compile(r"(?i)\b(?:oneclaw|1claw|api[_-]?key|bearer)\s*[:=]\s*\S+")
 
 
 def redact_secret_text(text: object) -> str:

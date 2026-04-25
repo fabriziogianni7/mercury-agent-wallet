@@ -18,9 +18,7 @@ class GasFees(BaseModel):
         has_eip1559 = self.max_fee_per_gas is not None or self.max_priority_fee_per_gas is not None
         if has_eip1559 and self.gas_price is not None:
             raise ValueError("Gas fees cannot mix EIP-1559 and legacy gas price fields.")
-        if has_eip1559 and (
-            self.max_fee_per_gas is None or self.max_priority_fee_per_gas is None
-        ):
+        if has_eip1559 and (self.max_fee_per_gas is None or self.max_priority_fee_per_gas is None):
             raise ValueError("EIP-1559 fees require max fee and priority fee.")
         if not has_eip1559 and self.gas_price is None:
             raise ValueError("Gas fees require either EIP-1559 fees or legacy gas price.")

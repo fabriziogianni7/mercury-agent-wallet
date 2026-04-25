@@ -24,7 +24,7 @@ def test_swap_intent_normalizes_addresses_and_provider() -> None:
         to_token=TOKEN_OUT.lower(),
         amount_in="1.5",
         max_slippage_bps=50,
-        provider_preference="lifi",
+        provider_preference=SwapProviderName.LIFI,
         idempotency_key="swap-1",
     )
 

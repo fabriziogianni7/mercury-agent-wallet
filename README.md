@@ -7,11 +7,12 @@ chain registry, initial domain models, a minimal LangGraph skeleton, 1Claw-backe
 secret-store abstractions for non-wallet configuration, and read-only EVM/ERC20
 tools.
 
-## Phase 2 Boundaries
+## Safety Boundaries
 
-Mercury does not sign or send transactions in this phase. It also does not retrieve
-private keys, call live RPC endpoints, integrate swap providers, expose FastAPI routes,
-or integrate with pan-agentikit.
+Mercury keeps private-key retrieval inside the signer boundary and keeps live RPC/API
+values behind 1Claw secret paths. Local tests use fake stores, fake providers, and fake
+signers by default; they must not require real secrets, live RPC access, or transaction
+broadcasts.
 
 All secret-like values are represented as 1Claw secret paths. Tests use fake 1Claw
 clients and secret stores only, so no real secrets or network access are required for
@@ -23,7 +24,22 @@ local development.
 uv sync
 uv run pytest
 uv run ruff check .
+uv run ruff format --check .
+uv run mypy mercury
 ```
+
+Optional live read-only tests are skipped unless explicitly enabled and configured:
+
+```bash
+MERCURY_RUN_LIVE_TESTS=true \
+ONECLAW_API_KEY=... \
+ONECLAW_VAULT_ID=... \
+uv run pytest -m "integration and live_rpc"
+```
+
+Live tests are read-only and must not fetch wallet private keys or broadcast
+transactions. `ONECLAW_BASE_URL`, `ONECLAW_AGENT_ID`, and
+`MERCURY_LIVE_READONLY_CHAIN` may be set for local integration checks.
 
 ## Local FastAPI Service
 

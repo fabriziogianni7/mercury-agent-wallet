@@ -48,8 +48,7 @@ def format_success_response(
         name = tool_result.get("name") or "ERC20 token"
         symbol = _symbol(tool_result)
         return (
-            f"{name} ({symbol}) on {tool_result['chain']} has "
-            f"{tool_result['decimals']} decimals."
+            f"{name} ({symbol}) on {tool_result['chain']} has {tool_result['decimals']} decimals."
         )
     if intent_kind == ReadOnlyIntentKind.CONTRACT_READ.value:
         return (

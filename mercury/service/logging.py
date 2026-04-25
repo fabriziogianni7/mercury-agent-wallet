@@ -25,9 +25,7 @@ _SENSITIVE_KEY_PARTS = (
 )
 _URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
 _SECRET_PATH_PATTERN = re.compile(r"\bmercury/(?:rpc|apis|wallets)/[A-Za-z0-9_./-]+\b")
-_ONECLAW_TOKEN_PATTERN = re.compile(
-    r"(?i)\b(?:oneclaw|1claw|api[_-]?key|bearer)\s*[:=]\s*\S+"
-)
+_ONECLAW_TOKEN_PATTERN = re.compile(r"(?i)\b(?:oneclaw|1claw|api[_-]?key|bearer)\s*[:=]\s*\S+")
 _LONG_HEX_PATTERN = re.compile(r"\b0x[a-fA-F0-9]{96,}\b")
 
 

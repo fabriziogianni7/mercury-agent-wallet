@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from mercury.models.swaps import SwapExecutionType, SwapProviderName, SwapQuoteRequest
 from mercury.swaps.lifi import LiFiProvider
 
@@ -18,7 +20,8 @@ def test_lifi_quote_response_normalizes_route_and_spender() -> None:
     assert quote.route.from_chain_id == 8453
     assert quote.route.spender_address == SPENDER
     assert quote.expected_amount_out_raw == 1_000_000
-    assert http.get_requests[0]["params"]["fromAmount"] == "1500000"
+    params = cast(dict[str, Any], http.get_requests[0]["params"])
+    assert params["fromAmount"] == "1500000"
 
 
 def test_lifi_build_execution_produces_evm_payload() -> None:

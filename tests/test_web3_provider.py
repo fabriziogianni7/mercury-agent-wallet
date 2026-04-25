@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import mercury.providers.web3 as web3_provider
 import pytest
 from mercury.custody import FakeSecretStore, SecretNotFoundError
@@ -24,7 +26,8 @@ def test_provider_factory_resolves_ethereum_rpc(monkeypatch: pytest.MonkeyPatch)
     provider = Web3ProviderFactory(store).create("ethereum")
 
     assert provider.chain.name == "ethereum"
-    assert provider.client.provider == {"rpc_url": "https://eth.example.invalid"}
+    client = cast(Any, provider.client)
+    assert client.provider == {"rpc_url": "https://eth.example.invalid"}
 
 
 def test_provider_factory_resolves_base_rpc(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -34,7 +37,8 @@ def test_provider_factory_resolves_base_rpc(monkeypatch: pytest.MonkeyPatch) -> 
     provider = Web3ProviderFactory(store).create("base")
 
     assert provider.chain.name == "base"
-    assert provider.client.provider == {"rpc_url": "https://base.example.invalid"}
+    client = cast(Any, provider.client)
+    assert client.provider == {"rpc_url": "https://base.example.invalid"}
 
 
 def test_provider_factory_fails_cleanly_when_rpc_secret_missing() -> None:

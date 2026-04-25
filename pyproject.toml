@@ -26,6 +26,11 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = [
+    "integration: optional integration tests disabled unless explicitly configured",
+    "live_rpc: tests that may call live read-only RPC endpoints",
+    "requires_oneclaw: tests that require 1Claw credentials",
+]
 
 [tool.ruff]
 line-length = 100
