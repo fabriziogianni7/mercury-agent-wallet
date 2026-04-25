@@ -10,6 +10,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "typing-extensions",
+    "web3>=7.15.0",
 ]
 
 [dependency-groups]

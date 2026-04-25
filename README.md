@@ -2,9 +2,10 @@
 
 Mercury is the wallet-agent package for the Agentic Pantheon project.
 
-This Phase 2 foundation creates the Python project scaffold, typed configuration,
-static chain registry, initial domain models, a minimal LangGraph skeleton, and
-1Claw-backed secret-store abstractions for non-wallet configuration.
+This foundation creates the Python project scaffold, typed configuration, static
+chain registry, initial domain models, a minimal LangGraph skeleton, 1Claw-backed
+secret-store abstractions for non-wallet configuration, and read-only EVM/ERC20
+tools.
 
 ## Phase 2 Boundaries
 
@@ -45,3 +46,24 @@ Mercury reserves these non-wallet paths for Phase 2 secret resolution:
 Wallet private-key paths are documented for later phases only:
 
 - `mercury/wallets/{wallet_id}/private_key`
+
+## Read-Only EVM Tools
+
+Phase 3 adds read-only wallet tools for Ethereum and Base. Runtime callers inject a
+`Web3ProviderFactory` backed by a custody `SecretStore`; tests use fake providers and
+do not call live RPC endpoints.
+
+```python
+from mercury.custody import FakeSecretStore
+from mercury.providers import Web3ProviderFactory
+from mercury.tools import create_readonly_tools
+
+store = FakeSecretStore({"mercury/rpc/ethereum": "https://eth.example.invalid"})
+provider_factory = Web3ProviderFactory(store)
+
+tools = create_readonly_tools(provider_factory)
+```
+
+The Phase 3 surface is read-only: native balances, ERC20 metadata, ERC20 balances,
+ERC20 allowances, and generic view/pure contract calls. It does not retrieve private
+keys, sign, approve, transfer, swap, or send transactions.
