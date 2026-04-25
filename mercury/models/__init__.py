@@ -5,9 +5,23 @@ from mercury.models.amounts import (
     FormattedAmount,
     InvalidTokenDecimalsError,
     format_units,
+    parse_units,
     validate_token_decimals,
 )
 from mercury.models.chain import ChainConfig, ChainReference
+from mercury.models.erc20 import (
+    MAX_UINT256,
+    ZERO_ADDRESS,
+    ERC20Action,
+    ERC20Amount,
+    ERC20Token,
+)
+from mercury.models.erc20 import (
+    ERC20ApprovalIntent as ERC20ApprovalActionIntent,
+)
+from mercury.models.erc20 import (
+    ERC20TransferIntent as ERC20TransferActionIntent,
+)
 from mercury.models.execution import (
     ExecutableTransaction,
     ExecutionResult,
@@ -17,7 +31,9 @@ from mercury.models.execution import (
 )
 from mercury.models.gas import GasFees
 from mercury.models.intents import (
+    ERC20ApprovalIntent,
     ERC20BalanceIntent,
+    ERC20TransferIntent,
     IntentKind,
     NativeBalanceIntent,
     PlaceholderTransactionIntent,
@@ -48,7 +64,14 @@ __all__ = [
     "FormattedAmount",
     "GasFees",
     "ChainReference",
+    "ERC20Action",
+    "ERC20Amount",
+    "ERC20ApprovalActionIntent",
+    "ERC20ApprovalIntent",
     "ERC20BalanceIntent",
+    "ERC20Token",
+    "ERC20TransferActionIntent",
+    "ERC20TransferIntent",
     "InvalidEVMAddressError",
     "InvalidTokenDecimalsError",
     "IntentKind",
@@ -71,7 +94,10 @@ __all__ = [
     "WalletAddressResult",
     "WalletIntent",
     "WalletRef",
+    "MAX_UINT256",
+    "ZERO_ADDRESS",
     "format_units",
     "normalize_evm_address",
+    "parse_units",
     "validate_token_decimals",
 ]

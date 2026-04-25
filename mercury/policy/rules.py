@@ -2,6 +2,7 @@
 
 from mercury.chains import UnsupportedChainError, get_chain_by_name
 from mercury.models.addresses import normalize_evm_address
+from mercury.models.erc20 import MAX_UINT256, ZERO_ADDRESS, ERC20Action
 from mercury.models.execution import ExecutableTransaction
 from mercury.models.simulation import SimulationResult
 
@@ -52,3 +53,56 @@ def excessive_gas_reason(
     if max_gas_limit is not None and transaction.gas.gas_limit > max_gas_limit:
         return "Estimated gas exceeds configured maximum."
     return None
+
+
+def erc20_policy_reason(
+    transaction: ExecutableTransaction,
+    *,
+    reject_unlimited_approvals: bool = True,
+    reject_self_transfers: bool = True,
+) -> str | None:
+    """Return a rejection reason for ERC20-specific transaction policy."""
+
+    action = transaction.metadata.get("action")
+    if action == ERC20Action.TRANSFER.value:
+        recipient = _metadata_address(transaction, "recipient_address")
+        if recipient == normalize_evm_address(ZERO_ADDRESS):
+            return "ERC20 transfer recipient must not be the zero address."
+        if reject_self_transfers and transaction.from_address is not None:
+            if recipient == normalize_evm_address(transaction.from_address):
+                return "ERC20 self-transfer is not allowed."
+        return None
+
+    if action == ERC20Action.APPROVAL.value:
+        spender = _metadata_address(transaction, "spender_address")
+        if spender == normalize_evm_address(ZERO_ADDRESS):
+            return "ERC20 approval spender must not be the zero address."
+        amount_raw = transaction.metadata.get("amount_raw")
+        unlimited = (
+            transaction.metadata.get("unlimited_approval") is True or amount_raw == MAX_UINT256
+        )
+        if reject_unlimited_approvals and unlimited:
+            return "Unlimited ERC20 approvals are rejected by default."
+        return None
+
+    return None
+
+
+def erc20_approval_reason(transaction: ExecutableTransaction) -> str | None:
+    """Return an ERC20-specific approval reason when a transaction needs approval."""
+
+    action = transaction.metadata.get("action")
+    if action == ERC20Action.TRANSFER.value:
+        return "Human approval is required for ERC20 transfers."
+    if action == ERC20Action.APPROVAL.value:
+        if transaction.metadata.get("spender_known") is False:
+            return "Human approval is required for ERC20 approvals; spender is unknown."
+        return "Human approval is required for ERC20 approvals."
+    return None
+
+
+def _metadata_address(transaction: ExecutableTransaction, key: str) -> str:
+    value = transaction.metadata.get(key)
+    if not isinstance(value, str):
+        raise ValueError(f"ERC20 transaction metadata missing {key}.")
+    return normalize_evm_address(value)

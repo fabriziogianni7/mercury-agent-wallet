@@ -3,7 +3,9 @@
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from mercury.models.addresses import normalize_evm_address
 
 Address = Annotated[str, Field(pattern=r"^0x[a-fA-F0-9]{40}$")]
 
@@ -15,6 +17,8 @@ class IntentKind(StrEnum):
     NATIVE_BALANCE = "native_balance"
     ERC20_BALANCE = "erc20_balance"
     PREPARE_TRANSACTION = "prepare_transaction"
+    ERC20_TRANSFER = "erc20_transfer"
+    ERC20_APPROVAL = "erc20_approval"
 
 
 class BaseWalletIntent(BaseModel):
@@ -56,6 +60,57 @@ class PlaceholderTransactionIntent(BaseWalletIntent):
     summary: str = Field(min_length=1)
 
 
+class ERC20TransferIntent(BaseWalletIntent):
+    """Intent to prepare an ERC20 transfer through the transaction pipeline."""
+
+    kind: Literal[IntentKind.ERC20_TRANSFER] = IntentKind.ERC20_TRANSFER
+    chain: str = Field(min_length=1)
+    wallet_id: str = Field(min_length=1)
+    token_address: Address
+    recipient_address: Address
+    amount: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1)
+
+    @field_validator("chain")
+    @classmethod
+    def normalize_chain(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("token_address", "recipient_address")
+    @classmethod
+    def normalize_address(cls, value: str) -> str:
+        return normalize_evm_address(value)
+
+
+class ERC20ApprovalIntent(BaseWalletIntent):
+    """Intent to prepare an ERC20 approval through the transaction pipeline."""
+
+    kind: Literal[IntentKind.ERC20_APPROVAL] = IntentKind.ERC20_APPROVAL
+    chain: str = Field(min_length=1)
+    wallet_id: str = Field(min_length=1)
+    token_address: Address
+    spender_address: Address
+    amount: str = Field(min_length=1)
+    idempotency_key: str | None = Field(default=None, min_length=1)
+    spender_known: bool = False
+    allow_unlimited: bool = False
+
+    @field_validator("chain")
+    @classmethod
+    def normalize_chain(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("token_address", "spender_address")
+    @classmethod
+    def normalize_address(cls, value: str) -> str:
+        return normalize_evm_address(value)
+
+
 type WalletIntent = (
-    ReadContractIntent | NativeBalanceIntent | ERC20BalanceIntent | PlaceholderTransactionIntent
+    ReadContractIntent
+    | NativeBalanceIntent
+    | ERC20BalanceIntent
+    | PlaceholderTransactionIntent
+    | ERC20TransferIntent
+    | ERC20ApprovalIntent
 )

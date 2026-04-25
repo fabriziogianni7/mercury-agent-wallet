@@ -1,6 +1,6 @@
-"""Amount formatting helpers for native and token balances."""
+"""Amount parsing and formatting helpers for native and token balances."""
 
-from decimal import Decimal, localcontext
+from decimal import Decimal, InvalidOperation, localcontext
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -35,6 +35,41 @@ def format_units(raw_amount: int, decimals: int) -> str:
         formatted = Decimal(raw_amount) / (Decimal(10) ** decimals)
 
     return format(formatted, "f")
+
+
+def parse_units(amount: str, decimals: int) -> int:
+    """Parse a human decimal amount into raw token units."""
+
+    validate_token_decimals(decimals)
+    candidate = amount.strip()
+    if not candidate:
+        raise ValueError("Amount must not be empty.")
+    if candidate.startswith("+"):
+        candidate = candidate[1:]
+
+    try:
+        parsed = Decimal(candidate)
+    except InvalidOperation as exc:
+        raise ValueError("Amount must be a valid decimal string.") from exc
+
+    if not parsed.is_finite():
+        raise ValueError("Amount must be finite.")
+    if parsed < 0:
+        raise ValueError("Amount must not be negative.")
+
+    normalized = parsed.normalize()
+    exponent = normalized.as_tuple().exponent
+    fractional_digits = max(-exponent, 0) if isinstance(exponent, int) else 0
+    if fractional_digits > decimals:
+        raise ValueError("Amount has too many decimal places for token decimals.")
+
+    with localcontext() as context:
+        context.prec = max(len(candidate), decimals) + decimals + 4
+        raw = parsed * (Decimal(10) ** decimals)
+
+    if raw != raw.to_integral_value():
+        raise ValueError("Amount has too many decimal places for token decimals.")
+    return int(raw)
 
 
 class FormattedAmount(BaseModel):

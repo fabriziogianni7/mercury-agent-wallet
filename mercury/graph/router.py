@@ -16,7 +16,9 @@ ROUTE_FORMAT_RESPONSE = "format_response"
 ROUTE_REJECT_TRANSACTION = "reject_transaction"
 ROUTE_REQUEST_APPROVAL = "request_approval"
 ROUTE_CHECK_IDEMPOTENCY = "check_idempotency"
+ROUTE_RESOLVE_NONCE = "resolve_nonce"
 ROUTE_SIGN_TRANSACTION = "sign_transaction"
+ROUTE_PREPARE_ERC20_TRANSACTION = "prepare_erc20_transaction"
 
 _READ_ROUTES = {
     ReadOnlyIntentKind.NATIVE_BALANCE.value: ROUTE_NATIVE_BALANCE,

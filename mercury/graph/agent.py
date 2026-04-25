@@ -11,6 +11,12 @@ from mercury.graph.nodes import (
     resolve_chain,
     unsupported_response,
 )
+from mercury.graph.nodes_erc20 import (
+    ERC20GraphDependencies,
+    make_erc20_prepare_node,
+    route_after_erc20_prepare,
+    route_erc20_intent,
+)
 from mercury.graph.nodes_transaction import (
     TransactionGraphDependencies,
     make_approval_node,
@@ -32,9 +38,11 @@ from mercury.graph.router import (
     ROUTE_ERC20_METADATA,
     ROUTE_FORMAT_RESPONSE,
     ROUTE_NATIVE_BALANCE,
+    ROUTE_PREPARE_ERC20_TRANSACTION,
     ROUTE_REJECT_TRANSACTION,
     ROUTE_REQUEST_APPROVAL,
     ROUTE_RESOLVE_CHAIN,
+    ROUTE_RESOLVE_NONCE,
     ROUTE_SIGN_TRANSACTION,
     ROUTE_UNSUPPORTED,
     route_after_chain,
@@ -118,6 +126,51 @@ def build_transaction_graph(deps: TransactionGraphDependencies) -> StateGraph[Me
     """Build the uncompiled generic value-moving transaction graph."""
 
     builder = StateGraph(MercuryState)
+    _add_transaction_pipeline(builder, deps)
+
+    builder.add_edge(START, "resolve_nonce")
+
+    return builder
+
+
+def build_erc20_transaction_graph(
+    erc20_deps: ERC20GraphDependencies,
+    transaction_deps: TransactionGraphDependencies,
+) -> StateGraph[MercuryState]:
+    """Build an ERC20 preparation graph that feeds the generic transaction pipeline."""
+
+    builder = StateGraph(MercuryState)
+    builder.add_node("prepare_erc20_transaction", cast(Any, make_erc20_prepare_node(erc20_deps)))
+    builder.add_node("unsupported_response", unsupported_response)
+    _add_transaction_pipeline(builder, transaction_deps)
+
+    builder.add_conditional_edges(
+        START,
+        route_erc20_intent,
+        {
+            ROUTE_PREPARE_ERC20_TRANSACTION: "prepare_erc20_transaction",
+            ROUTE_UNSUPPORTED: "unsupported_response",
+        },
+    )
+    builder.add_conditional_edges(
+        "prepare_erc20_transaction",
+        route_after_erc20_prepare,
+        {
+            ROUTE_REJECT_TRANSACTION: "reject_transaction",
+            ROUTE_RESOLVE_NONCE: "resolve_nonce",
+        },
+    )
+    builder.add_edge("unsupported_response", END)
+
+    return builder
+
+
+def _add_transaction_pipeline(
+    builder: StateGraph[MercuryState],
+    deps: TransactionGraphDependencies,
+) -> None:
+    """Add the Phase 6 transaction execution pipeline nodes to a graph."""
+
     builder.add_node("resolve_nonce", cast(Any, make_resolve_nonce_node(deps)))
     builder.add_node("populate_gas", cast(Any, make_populate_gas_node(deps)))
     builder.add_node("simulate_transaction", cast(Any, make_simulate_transaction_node(deps)))
@@ -129,7 +182,6 @@ def build_transaction_graph(deps: TransactionGraphDependencies) -> StateGraph[Me
     builder.add_node("monitor_receipt", cast(Any, make_monitor_receipt_node(deps)))
     builder.add_node("reject_transaction", reject_transaction)
 
-    builder.add_edge(START, "resolve_nonce")
     builder.add_edge("resolve_nonce", "populate_gas")
     builder.add_edge("populate_gas", "simulate_transaction")
     builder.add_edge("simulate_transaction", "evaluate_policy")
@@ -162,8 +214,6 @@ def build_transaction_graph(deps: TransactionGraphDependencies) -> StateGraph[Me
     builder.add_edge("broadcast_transaction", "monitor_receipt")
     builder.add_edge("monitor_receipt", END)
     builder.add_edge("reject_transaction", END)
-
-    return builder
 
 
 graph = build_graph().compile()
