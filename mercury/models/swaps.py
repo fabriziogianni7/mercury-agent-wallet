@@ -60,7 +60,7 @@ class SwapIntent(BaseModel):
     to_chain_id: int | None = Field(
         default=None,
         gt=0,
-        description="Optional destination EVM chain id; when set and differs from the source, requests a bridge.",
+        description="Optional destination chain id; differs from source for bridge quotes.",
     )
 
     @field_validator("chain", "to_chain")
@@ -114,12 +114,12 @@ class SwapQuoteRequest(BaseModel):
     to_chain: str | None = Field(
         default=None,
         min_length=1,
-        description="Optional destination chain name; must align with to_chain_id when both are set.",
+        description="Optional destination chain name; must match to_chain_id when both are set.",
     )
     to_chain_id: int | None = Field(
         default=None,
         gt=0,
-        description="When None, the quote is same-chain; otherwise the expected destination chain id (bridge).",
+        description="None means same-chain; otherwise the destination chain id for a bridge quote.",
     )
 
     @field_validator("chain", "to_chain")

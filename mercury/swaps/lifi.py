@@ -139,12 +139,14 @@ class LiFiProvider:
         try:
             expected_out = _require_amount_int(em, "toAmount")
         except SwapProviderError as exc:
-            raise SwapProviderError("LiFi quote response missing toAmount in estimate or body.") from exc
+            msg = "LiFi quote response missing toAmount in estimate or body."
+            raise SwapProviderError(msg) from exc
         min_out = _optional_amount_key(em, "toAmountMin")
         try:
             amount_in = _require_amount_int(em, "fromAmount")
         except SwapProviderError as exc:
-            raise SwapProviderError("LiFi quote response missing fromAmount in estimate or body.") from exc
+            msg = "LiFi quote response missing fromAmount in estimate or body."
+            raise SwapProviderError(msg) from exc
         expires_at = _expiry(payload, estimate, em, action)
         route_kind = SwapRouteKind.BRIDGE if from_chain_id != to_chain_id else SwapRouteKind.SWAP
 
@@ -255,7 +257,8 @@ def _coerce_non_negative_int(value: Any, field: str) -> int:
         try:
             n = int(s, 10)
         except ValueError as exc:
-            raise SwapProviderError(f"Swap provider response has invalid amount field '{field}'.") from exc
+            err = f"Swap provider response has invalid amount field '{field}'."
+            raise SwapProviderError(err) from exc
         if n < 0:
             raise SwapProviderError(f"Swap provider response field '{field}' must be non-negative.")
         return n

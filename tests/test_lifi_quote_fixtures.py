@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 import pytest
-
 from mercury.models.swaps import SwapExecutionType, SwapQuoteRequest, SwapRouteKind
 from mercury.swaps.base import SwapProviderError
 from mercury.swaps.lifi import LiFiProvider

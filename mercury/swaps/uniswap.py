@@ -12,7 +12,7 @@ via 1Claw / :class:`mercury.swaps.base.SwapProviderConfig` and sent as
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from mercury.models.execution import PreparedTransaction
@@ -243,7 +243,8 @@ def _coerce_non_negative_int(value: Any, field: str) -> int:
         try:
             n = int(s, 10)
         except ValueError as exc:
-            raise SwapProviderError(f"Swap provider response has invalid amount field '{field}'.") from exc
+            err = f"Swap provider response has invalid amount field '{field}'."
+            raise SwapProviderError(err) from exc
         if n < 0:
             raise SwapProviderError(f"Swap provider response field '{field}' must be non-negative.")
         return n
