@@ -8,6 +8,8 @@ from mercury.policy.rules import (
     erc20_policy_reason,
     excessive_gas_reason,
     invalid_transaction_reason,
+    native_transfer_approval_reason,
+    native_transfer_policy_reason,
     simulation_failure_reason,
     unsupported_chain_reason,
 )
@@ -51,6 +53,7 @@ class TransactionPolicyEngine:
                 reject_unlimited_approvals=self._reject_unlimited_erc20_approvals,
                 reject_self_transfers=self._reject_erc20_self_transfers,
             ),
+            native_transfer_policy_reason(transaction),
             swap_transaction_policy_reason(transaction, config=self._swap_policy_config),
         ):
             if reason is not None:
@@ -59,6 +62,9 @@ class TransactionPolicyEngine:
         erc20_reason = erc20_approval_reason(transaction)
         if erc20_reason is not None:
             return PolicyDecision(status=PolicyDecisionStatus.NEEDS_APPROVAL, reason=erc20_reason)
+        native_reason = native_transfer_approval_reason(transaction)
+        if native_reason is not None:
+            return PolicyDecision(status=PolicyDecisionStatus.NEEDS_APPROVAL, reason=native_reason)
         swap_reason = swap_approval_reason(transaction)
         if swap_reason is not None:
             return PolicyDecision(status=PolicyDecisionStatus.NEEDS_APPROVAL, reason=swap_reason)

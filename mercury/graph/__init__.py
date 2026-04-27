@@ -3,6 +3,7 @@
 from mercury.graph.agent import (
     build_erc20_transaction_graph,
     build_graph,
+    build_native_transaction_graph,
     build_swap_transaction_graph,
     graph,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "build_default_runtime",
     "build_erc20_transaction_graph",
     "build_graph",
+    "build_native_transaction_graph",
     "build_swap_transaction_graph",
     "graph",
 ]

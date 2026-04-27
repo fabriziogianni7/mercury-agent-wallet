@@ -7,9 +7,11 @@ from typing import Any, Protocol, cast, runtime_checkable
 from mercury.graph.agent import (
     build_erc20_transaction_graph,
     build_graph,
+    build_native_transaction_graph,
     build_swap_transaction_graph,
 )
 from mercury.graph.nodes_erc20 import ERC20GraphDependencies
+from mercury.graph.nodes_native import NativeGraphDependencies
 from mercury.graph.nodes_swaps import SwapGraphDependencies
 from mercury.graph.nodes_transaction import TransactionGraphDependencies
 from mercury.graph.state import MercuryState
@@ -40,10 +42,12 @@ class MercuryGraphRuntime:
         *,
         read_graph: InvokableGraph,
         erc20_graph: InvokableGraph,
+        native_graph: InvokableGraph,
         swap_graph: InvokableGraph,
     ) -> None:
         self._read_graph = read_graph
         self._erc20_graph = erc20_graph
+        self._native_graph = native_graph
         self._swap_graph = swap_graph
 
     def invoke(self, state: MercuryState) -> MercuryState:
@@ -61,6 +65,8 @@ class MercuryGraphRuntime:
             kind = str(payload.get("kind", "")).strip().lower()
             if kind in {"erc20_transfer", "erc20_approval"}:
                 return self._erc20_graph
+            if kind == "native_transfer":
+                return self._native_graph
             if kind == "swap":
                 return self._swap_graph
         return self._read_graph
@@ -70,6 +76,7 @@ def build_default_runtime(
     *,
     registry: ReadOnlyToolRegistry,
     erc20_deps: ERC20GraphDependencies,
+    native_deps: NativeGraphDependencies,
     swap_deps: SwapGraphDependencies,
     transaction_deps: TransactionGraphDependencies,
 ) -> MercuryGraphRuntime:
@@ -78,5 +85,6 @@ def build_default_runtime(
     return MercuryGraphRuntime(
         read_graph=build_graph(registry).compile(),
         erc20_graph=build_erc20_transaction_graph(erc20_deps, transaction_deps).compile(),
+        native_graph=build_native_transaction_graph(native_deps, transaction_deps).compile(),
         swap_graph=build_swap_transaction_graph(swap_deps, transaction_deps).compile(),
     )

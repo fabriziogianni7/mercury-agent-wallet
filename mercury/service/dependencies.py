@@ -15,6 +15,7 @@ from mercury.custody import (
     SecretStore,
 )
 from mercury.graph.nodes_erc20 import ERC20GraphDependencies
+from mercury.graph.nodes_native import NativeGraphDependencies
 from mercury.graph.nodes_swaps import SwapGraphDependencies
 from mercury.graph.nodes_transaction import TransactionGraphDependencies
 from mercury.graph.runtime import GraphRuntime, build_default_runtime
@@ -116,6 +117,7 @@ def get_graph_runtime(request: Request) -> GraphRuntime:
             provider_factory=provider_factory,
             address_resolver=signer,
         ),
+        native_deps=NativeGraphDependencies(address_resolver=signer),
         swap_deps=SwapGraphDependencies(
             router=swap_router,
             provider_factory=provider_factory,

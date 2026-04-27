@@ -248,7 +248,7 @@ def _prepared_transaction(**overrides: Any) -> dict[str, Any]:
         "value_wei": 1,
         "data": "0x",
         "idempotency_key": "phase-6",
-        "metadata": {"action": "native_transfer"},
+        "metadata": {"action": "native_transfer", "recipient_address": RECIPIENT},
     }
     data.update(overrides)
     return data

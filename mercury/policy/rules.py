@@ -6,6 +6,8 @@ from mercury.models.erc20 import MAX_UINT256, ZERO_ADDRESS, ERC20Action
 from mercury.models.execution import ExecutableTransaction
 from mercury.models.simulation import SimulationResult
 
+NATIVE_TRANSFER_ACTION = "native_transfer"
+
 
 def unsupported_chain_reason(transaction: ExecutableTransaction) -> str | None:
     """Return a rejection reason when the chain is not supported or mismatched."""
@@ -112,6 +114,30 @@ def erc20_policy_reason(
     return None
 
 
+def native_transfer_policy_reason(transaction: ExecutableTransaction) -> str | None:
+    """Reject malformed native (gas token) transfers."""
+
+    if transaction.metadata.get("action") != NATIVE_TRANSFER_ACTION:
+        return None
+    if transaction.value_wei <= 0:
+        return "Native transfer amount must be greater than zero."
+    data = transaction.data if isinstance(transaction.data, str) else "0x"
+    if data != "0x":
+        return "Native transfer must not include contract calldata."
+    try:
+        recipient = _metadata_address(transaction, "recipient_address")
+    except ValueError:
+        return "Native transfer metadata is missing recipient_address."
+    if normalize_evm_address(transaction.to) != recipient:
+        return "Native transfer `to` must match the recipient address."
+    if recipient == normalize_evm_address(ZERO_ADDRESS):
+        return "Native transfer recipient must not be the zero address."
+    if transaction.from_address is not None:
+        if recipient == normalize_evm_address(transaction.from_address):
+            return "Native self-transfer is not allowed."
+    return None
+
+
 def erc20_approval_reason(transaction: ExecutableTransaction) -> str | None:
     """Return an ERC20-specific approval reason when a transaction needs approval."""
 
@@ -125,8 +151,14 @@ def erc20_approval_reason(transaction: ExecutableTransaction) -> str | None:
     return None
 
 
+def native_transfer_approval_reason(transaction: ExecutableTransaction) -> str | None:
+    if transaction.metadata.get("action") == NATIVE_TRANSFER_ACTION:
+        return "Human approval is required for native token transfers."
+    return None
+
+
 def _metadata_address(transaction: ExecutableTransaction, key: str) -> str:
     value = transaction.metadata.get(key)
     if not isinstance(value, str):
-        raise ValueError(f"ERC20 transaction metadata missing {key}.")
+        raise ValueError(f"Transaction metadata missing {key}.")
     return normalize_evm_address(value)

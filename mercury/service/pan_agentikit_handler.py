@@ -30,7 +30,7 @@ _PAYLOAD_KIND_ALIASES = {
     "task_request": "task_request",
 }
 _SUPPORTED_PAYLOADS = {"user_message", "task_request"}
-_VALUE_MOVING_KINDS = {"erc20_transfer", "erc20_approval", "swap"}
+_VALUE_MOVING_KINDS = {"erc20_transfer", "erc20_approval", "native_transfer", "swap"}
 
 
 def handle_agent_envelope(

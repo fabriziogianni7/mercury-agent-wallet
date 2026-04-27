@@ -147,6 +147,7 @@ Read-only kinds:
 
 Value-moving kinds:
 
+- `native_transfer` (chain gas token, e.g. ETH on Base)
 - `erc20_transfer`
 - `erc20_approval`
 - `swap`

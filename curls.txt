@@ -149,6 +149,29 @@ curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
   }'
 
 # -----------------------------------------------------------------------------
+# 9b) Native transfer — send ETH (or the chain gas token, e.g. ETH on Base)
+#
+# Same approval + Idempotency-Key rules as ERC20: first call may return
+# approval_required; repeat with top-level approval_response and the same key.
+# amount is a decimal string in ETH units (18 decimals). Needs balance for value + gas.
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-native-transfer-1" \
+  -H "Idempotency-Key: e2e-native-transfer-manual-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "intent": {
+      "kind": "native_transfer",
+      "chain": "base",
+      "wallet_id": "primary",
+      "recipient_address": "YOUR_RECIPIENT",
+      "amount": "0.000000001"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
 # 10) ERC20 transfer — value-moving (loads mercury/wallets/primary/private_key)
 #
 # Requires Idempotency-Key. For the two-step approval flow with (10b), use the same
@@ -158,7 +181,7 @@ curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
 curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: e2e-erc20-transfer-1" \
-  -H "Idempotency-Key: e2e-erc20-transfer-manual-1" \
+  -H "Idempotency-Key: e2e-erc20-transfer-manual-2" \
   -d '{
     "user_id": "e2e-user",
     "wallet_id": "primary",
@@ -186,7 +209,7 @@ curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
 curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: e2e-erc20-transfer-2" \
-  -H "Idempotency-Key: e2e-erc20-transfer-manual-1" \
+  -H "Idempotency-Key: e2e-erc20-transfer-manual-2" \
   -d '{
     "user_id": "e2e-user",
     "wallet_id": "primary",
@@ -194,7 +217,7 @@ curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
       "status": "approved",
       "approved_by": "e2e-operator",
       "reason": "Confirmed transfer out-of-band",
-      "idempotency_key": "e2e-erc20-transfer-manual-1"
+      "idempotency_key": "e2e-erc20-transfer-manual-2"
     },
     "intent": {
       "kind": "erc20_transfer",
