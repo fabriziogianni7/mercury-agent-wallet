@@ -17,6 +17,39 @@ SPENDER = "0x0000000000000000000000000000000000000002"
 SWAP_TO = "0x0000000000000000000000000000000000000003"
 
 
+def test_lifi_fixture_action_uses_token_objects_with_address() -> None:
+    """OpenAPI /quote returns action.fromToken and action.toToken as Token objects."""
+
+    http = FakeHttpClient(
+        {
+            "id": "obj-tok",
+            "action": {
+                "fromChainId": 8453,
+                "toChainId": 8453,
+                "fromToken": {
+                    "address": TOKEN_IN,
+                    "symbol": "IN",
+                    "decimals": 18,
+                },
+                "toToken": {
+                    "address": TOKEN_OUT,
+                    "symbol": "OUT",
+                    "decimals": 18,
+                },
+            },
+            "estimate": {
+                "fromAmount": "1500000",
+                "toAmount": "1000000",
+            },
+            "transactionRequest": {"to": SWAP_TO, "data": "0x1", "value": "0"},
+        }
+    )
+    provider = LiFiProvider(http_client=http)
+    quote = provider.get_quote(_request())
+    assert quote.route.from_token == TOKEN_IN
+    assert quote.route.to_token == TOKEN_OUT
+
+
 def test_lifi_fixture_string_amounts_and_top_level_approval() -> None:
     """Amounts as decimal strings; approval only on payload (not inside estimate)."""
 

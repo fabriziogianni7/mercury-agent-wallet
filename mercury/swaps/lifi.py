@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from mercury.models.addresses import normalize_evm_address
 from mercury.models.execution import PreparedTransaction
 from mercury.models.swaps import (
     SwapEVMTransaction,
@@ -156,8 +157,8 @@ class LiFiProvider:
             route_kind=route_kind,
             from_chain_id=from_chain_id,
             to_chain_id=to_chain_id,
-            from_token=require_string(action, "fromToken"),
-            to_token=require_string(action, "toToken"),
+            from_token=_action_token_address(action, "fromToken", request.from_token),
+            to_token=_action_token_address(action, "toToken", request.to_token),
             spender_address=spender,
             steps=_steps(payload),
         )
@@ -173,6 +174,21 @@ class LiFiProvider:
             recipient_address=request.effective_recipient,
             raw_quote=payload,
         )
+
+
+def _action_token_address(action: dict[str, Any], key: str, fallback: str) -> str:
+    """Resolve token address from LiFi ``action`` (string or ``Token`` object)."""
+
+    raw = action.get(key)
+    if isinstance(raw, str) and raw.strip():
+        return normalize_evm_address(raw)
+    if isinstance(raw, dict):
+        addr = raw.get("address")
+        if isinstance(addr, str) and addr.strip():
+            return normalize_evm_address(addr)
+    if fallback.strip():
+        return normalize_evm_address(fallback)
+    raise SwapProviderError(f"LiFi quote action missing token field '{key}'.")
 
 
 def _request_to_chain_id(request: SwapQuoteRequest) -> int:

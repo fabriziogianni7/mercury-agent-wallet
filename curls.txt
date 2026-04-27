@@ -10,6 +10,9 @@
 # In 1Claw, ensure the agent can read:
 #   mercury/rpc/base (and/or mercury/rpc/ethereum)
 #   mercury/wallets/<wallet_id>/private_key   (only needed for signing / value-moving flows)
+# Optional (swap providers): mercury/apis/lifi  — if unset, LiFi uses the public API tier
+#   (no x-lifi-api-key header; lower rate limits than with a key from https://jumper.exchange/lifi
+#   or your LiFi dashboard).
 #
 # Replace placeholders below:
 #   YOUR_WALLET_ADDRESS — must match the EVM address for private key at mercury/wallets/primary/private_key
@@ -46,6 +49,38 @@ curl -sS http://127.0.0.1:8000/healthz
 # 4) Readiness — settings + chain registry OK (still no wallet or RPC fetch)
 # -----------------------------------------------------------------------------
 curl -sS http://127.0.0.1:8000/readyz
+
+# -----------------------------------------------------------------------------
+# 4b) LiFi /quote only — direct to https://li.quest (no Mercury, no 1Claw)
+#
+# Exercises the same HTTP API the LiFi adapter uses (GET /v1/quote). Public tier:
+# no API key. Replace FROM_ADDRESS with a real 0x (e.g. a test wallet). Amounts
+# are raw token units: 1 USDC on Base = 1000000 (6 decimals).
+# Docs: https://docs.li.fi/
+# -----------------------------------------------------------------------------
+LIFI_WALLET="0x0000000000000000000000000000000000000001"
+curl -sS -G "https://li.quest/v1/quote" \
+  --data-urlencode "fromChain=8453" \
+  --data-urlencode "toChain=8453" \
+  --data-urlencode "fromToken=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" \
+  --data-urlencode "toToken=0x4200000000000000000000000000000000000006" \
+  --data-urlencode "fromAmount=1000000" \
+  --data-urlencode "fromAddress=${LIFI_WALLET}" \
+  --data-urlencode "toAddress=${LIFI_WALLET}" \
+  --data-urlencode "slippage=0.01" \
+  | (command -v jq >/dev/null && jq . || cat -)
+
+# -----------------------------------------------------------------------------
+# 4c) LiFi with optional API key (same as 4b, if you have a key from LiFi)
+#
+# Uncomment and set LIFI_API_KEY, or add -H "x-lifi-api-key: ..." to match what
+# Mercury sends when 1Claw has mercury/apis/lifi.
+# -----------------------------------------------------------------------------
+# LIFI_API_KEY=your_lifi_key
+# curl -sS -G "https://li.quest/v1/quote" \
+#   -H "x-lifi-api-key: ${LIFI_API_KEY}" \
+#   --data-urlencode "fromChain=8453" \
+#   ... (same as 4b) ...
 
 # -----------------------------------------------------------------------------
 # 5) Native balance on Base (read-only; hits 1Claw for RPC only)
@@ -230,15 +265,23 @@ curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
   }'
 
 # -----------------------------------------------------------------------------
-# 11) Swap quote / prepare — value-moving path (needs swap provider + often mercury/apis/lifi in 1Claw)
+# 11) Swap quote / prepare — Mercury + LiFi (value-moving; needs 1Claw + RPC)
 #
-# Also requires Idempotency-Key on the intent. This exercises RPC + optional LiFi key
-# from 1Claw; may return policy or approval gates like other tx flows.
+# Prerequisites: Mercury running (see header), 1Claw with mercury/rpc/base, wallet
+# address matching mercury/wallets/primary/private_key if you go past “prepare”.
+# Idempotency-Key (header) is merged into the swap intent; include idempotency_key
+# in the body too for clarity. provider_preference "lifi" uses LiFi; bridge routes
+# are rejected unless policy enables allow_bridges.
+#
+# Expect: JSON with prepared_swap (quote, allowance, next tx) or policy/approval
+# state — not a raw LiFi payload (that is step 4b). For a fresh attempt, change
+# both Idempotency-Key and intent.idempotency_key (e.g. e2e-swap-lifi-2). For an
+# approval follow-up, reuse the same keys as 10b.
 # -----------------------------------------------------------------------------
 curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: e2e-swap-1" \
-  -H "Idempotency-Key: e2e-swap-$(date +%s)" \
+  -H "Idempotency-Key: e2e-swap-lifi-1" \
   -d '{
     "user_id": "e2e-user",
     "wallet_id": "primary",
@@ -250,7 +293,74 @@ curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
       "to_token": "0x4200000000000000000000000000000000000006",
       "amount_in": "1",
       "max_slippage_bps": 100,
-      "provider_preference": "lifi"
+      "provider_preference": "lifi",
+      "idempotency_key": "e2e-swap-lifi-1"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 11A) End-to-end LiFi swap (same-chain) — what runs and in what order
+#
+# With provider_preference "lifi", one HTTP invoke runs a LangGraph that:
+#   1) Quotes via LiFi and checks ERC20 allowance to the provider spender.
+#   2) If allowance is too low, the *next* transaction to sign is an ERC20 approval
+#      (not the swap). Human approval, sign, and broadcast can complete in one
+#      invoke (steps below) for that approval tx, or you run a second invoke after
+#      the on-chain approval confirms (use a *new* idempotency key for a fresh swap).
+#   3) If allowance is already enough, the prepared transaction is the LiFi swap;
+#      the pipeline is: nonce → gas → simulation → policy → human approval
+#      (RequestMetadataTransactionApprover in the default service) → idempotency
+#      → sign (1Claw + wallet key) → broadcast → receipt.
+#
+# Human approval: the default app uses ``RequestMetadataTransactionApprover``. The
+# first response may include ``approval_payload``; repeat the *same* swap intent
+# and the *same* Idempotency-Key, and set top-level ``approval_response`` with
+# status "approved" (see 11B). The approver also checks that
+# ``approval_response.idempotency_key`` matches the transaction idempotency key when
+# both are set.
+#
+# If you need *two* on-chain steps (approval tx, then swap), expect two pairs of
+# calls: (request → approve+execute approval) with idem ``…-approve-1``,
+# then (request → approve+execute swap) with idem ``…-swap-1``. Pre-approving the
+# spender in the wallet (outside Mercury) lets you skip the first pair.
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# 11B) E2E step 1 — request swap; expect approval gate or a prepared path in data
+# -----------------------------------------------------------------------------
+# export BASE=http://127.0.0.1:8000
+# curl (same as 11) ...
+
+# -----------------------------------------------------------------------------
+# 11C) E2E step 2 — same intent and keys, add human approval so signing can proceed
+#
+# Run this only after 11 returned ``approval_required`` or equivalent. Reuse the
+# exact ``Idempotency-Key`` and ``intent.idempotency_key`` from 11. Adjust keys if
+# you use different ones in step 1.
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-swap-1b" \
+  -H "Idempotency-Key: e2e-swap-lifi-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "approval_response": {
+      "status": "approved",
+      "approved_by": "e2e-operator",
+      "reason": "Out-of-band confirmation for swap or approval transaction",
+      "idempotency_key": "e2e-swap-lifi-1"
+    },
+    "intent": {
+      "kind": "swap",
+      "chain": "base",
+      "wallet_id": "primary",
+      "from_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "to_token": "0x4200000000000000000000000000000000000006",
+      "amount_in": "1",
+      "max_slippage_bps": 100,
+      "provider_preference": "lifi",
+      "idempotency_key": "e2e-swap-lifi-1"
     }
   }'
 
