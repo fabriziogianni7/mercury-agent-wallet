@@ -6,6 +6,7 @@ from mercury.tools.erc20_transactions import (
     prepare_erc20_approval,
     prepare_erc20_transfer,
 )
+
 from tests.test_evm_read_tools import FakeEth, FakeProviderFactory, FakeWeb3
 
 TOKEN = "0x000000000000000000000000000000000000cafE"

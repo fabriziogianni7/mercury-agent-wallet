@@ -1,6 +1,7 @@
 import pytest
 from mercury.models.amounts import InvalidTokenDecimalsError
 from mercury.tools import get_erc20_allowance, get_erc20_balance, get_erc20_metadata
+
 from tests.test_evm_read_tools import FakeEth, FakeProviderFactory, FakeWeb3
 
 TOKEN = "0x000000000000000000000000000000000000cafE"

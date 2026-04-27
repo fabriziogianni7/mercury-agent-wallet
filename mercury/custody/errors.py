@@ -28,10 +28,19 @@ class EmptySecretValueError(SecretStoreError):
 class SecretStoreUnavailableError(SecretStoreError):
     """Raised when the backing secret store cannot be reached or queried."""
 
-    def __init__(self, path: str, store_name: str = "secret store") -> None:
-        super().__init__(f"{store_name} could not resolve secret path '{path}'.")
+    def __init__(
+        self,
+        path: str,
+        store_name: str = "secret store",
+        *,
+        detail: str | None = None,
+    ) -> None:
         self.path = path
         self.store_name = store_name
+        if detail is not None:
+            super().__init__(f"{store_name}: {detail}")
+        else:
+            super().__init__(f"{store_name} could not resolve secret path '{path}'.")
 
 
 class WalletIdValidationError(CustodyError):

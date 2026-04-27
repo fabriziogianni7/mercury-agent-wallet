@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from mercury.custody.errors import (
@@ -86,6 +87,8 @@ class OneClawSecretStore:
             raise
         except EmptySecretValueError:
             raise
+        except SecretStoreUnavailableError:
+            raise
         except Exception as exc:
             raise SecretStoreUnavailableError(path, store_name="1Claw") from exc
 
@@ -96,7 +99,16 @@ class OneClawSecretStore:
 
 
 class OneClawHttpClient:
-    """Small stdlib HTTP adapter for 1Claw-compatible secret reads."""
+    """Small stdlib HTTP adapter for 1Claw-compatible secret reads.
+
+    Hosted ``api.1claw.xyz`` flow (when ``agent_id`` is passed on each read):
+
+    1. ``POST /v1/auth/agent-token`` with ``agent_id`` and ``api_key`` (agent API key).
+    2. ``GET /v1/vaults/{vault_id}/secrets/{path}`` with ``Authorization: Bearer <jwt>``.
+
+    When ``agent_id`` is omitted, uses legacy ``POST .../secrets:resolve`` with the API key
+    as the bearer token (for older or self-hosted deployments).
+    """
 
     def __init__(self, *, base_url: str, api_key: str) -> None:
         if not base_url.strip():
@@ -106,18 +118,109 @@ class OneClawHttpClient:
 
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
+        self._access_token: str | None = None
+        self._access_token_agent: str | None = None
 
     def get_secret(self, *, vault_id: str, path: str, agent_id: str | None = None) -> str:
         """Read a secret value from 1Claw without exposing it in errors."""
 
-        url = f"{self._base_url}/v1/vaults/{vault_id}/secrets:resolve"
-        payload: dict[str, str] = {"path": path}
-        if agent_id is not None:
-            payload["agent_id"] = agent_id
+        agent = agent_id.strip() if agent_id and agent_id.strip() else None
+        if agent is not None:
+            return self._get_secret_hosted(vault_id=vault_id, path=path, agent_id=agent)
+        return self._get_secret_legacy_resolve(vault_id=vault_id, path=path)
 
+    def _invalidate_access_token(self, agent_id: str) -> None:
+        if self._access_token_agent == agent_id:
+            self._access_token = None
+            self._access_token_agent = None
+
+    def _fetch_access_token(self, agent_id: str) -> str:
+        url = f"{self._base_url}/v1/auth/agent-token"
+        body = json.dumps({"agent_id": agent_id, "api_key": self._api_key}).encode("utf-8")
         request = Request(
             url,
-            data=json.dumps(payload).encode("utf-8"),
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise SecretStoreUnavailableError("agent authentication", store_name="1Claw") from exc
+        except (OSError, URLError, json.JSONDecodeError) as exc:
+            raise SecretStoreUnavailableError("agent authentication", store_name="1Claw") from exc
+
+        token = payload.get("access_token")
+        if not isinstance(token, str) or not token.strip():
+            raise SecretStoreUnavailableError("agent authentication", store_name="1Claw")
+
+        self._access_token = token.strip()
+        self._access_token_agent = agent_id
+        return self._access_token
+
+    def _bearer_for_agent(self, agent_id: str) -> str:
+        if self._access_token and self._access_token_agent == agent_id:
+            return self._access_token
+        return self._fetch_access_token(agent_id)
+
+    def _secret_url_path_suffix(self, path: str) -> str:
+        normalized = path.strip().lstrip("/")
+        if not normalized:
+            raise ValueError("Secret path must not be empty.")
+        return quote(normalized, safe="/")
+
+    def _get_secret_hosted(self, *, vault_id: str, path: str, agent_id: str) -> str:
+        bearer = self._bearer_for_agent(agent_id)
+        try:
+            return self._http_get_secret_value(vault_id, path, bearer)
+        except HTTPError as exc:
+            if exc.code == 401:
+                self._invalidate_access_token(agent_id)
+                bearer = self._bearer_for_agent(agent_id)
+                return self._http_get_secret_value(vault_id, path, bearer)
+            if exc.code == 404:
+                raise SecretNotFoundError(path) from exc
+            if exc.code == 403:
+                raise SecretStoreUnavailableError(
+                    path,
+                    store_name="1Claw",
+                    detail=(
+                        "HTTP 403 Forbidden — the agent token is valid but this principal "
+                        "is not allowed to read that vault or secret path. In 1Claw, grant "
+                        "the agent access to the vault, confirm MERCURY_ONECLAW_VAULT_ID, "
+                        "and that the secret path exists for that vault."
+                    ),
+                ) from exc
+            raise SecretStoreUnavailableError(path, store_name="1Claw") from exc
+
+    def _http_get_secret_value(self, vault_id: str, path: str, bearer: str) -> str:
+        suffix = self._secret_url_path_suffix(path)
+        url = f"{self._base_url}/v1/vaults/{vault_id}/secrets/{suffix}"
+        request = Request(
+            url,
+            headers={"Authorization": f"Bearer {bearer}"},
+            method="GET",
+        )
+        try:
+            with urlopen(request, timeout=10) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError:
+            raise
+        except (OSError, URLError, json.JSONDecodeError) as exc:
+            raise SecretStoreUnavailableError(path, store_name="1Claw") from exc
+
+        value = _extract_secret_value(response_payload)
+        if value is None:
+            raise SecretNotFoundError(path)
+        return value
+
+    def _get_secret_legacy_resolve(self, *, vault_id: str, path: str) -> str:
+        url = f"{self._base_url}/v1/vaults/{vault_id}/secrets:resolve"
+        payload = json.dumps({"path": path}).encode("utf-8")
+        request = Request(
+            url,
+            data=payload,
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",

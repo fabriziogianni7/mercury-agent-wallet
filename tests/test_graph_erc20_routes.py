@@ -11,6 +11,7 @@ from mercury.models.simulation import SimulationResult, SimulationStatus
 from mercury.models.wallets import WalletAddressResult
 from mercury.policy.idempotency import InMemoryIdempotencyStore
 from mercury.policy.risk import TransactionPolicyEngine
+
 from tests.test_evm_read_tools import FakeEth, FakeProviderFactory, FakeWeb3
 
 TOKEN = "0x000000000000000000000000000000000000cafE"
