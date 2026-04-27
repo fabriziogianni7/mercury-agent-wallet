@@ -95,6 +95,19 @@ class SwapProviderConfig:
         )
 
 
+# Cloudflare and similar WAFs often return HTTP 403 / error 1010 for the default
+# ``Python-urllib/x.y`` user agent (browser-integrity / bot heuristics). Realistic
+# headers are required for public provider APIs in production.
+_DEFAULT_HTTP_HEADERS: dict[str, str] = {
+    "User-Agent": "Mercury/0.1 (EVM agent; https://github.com/fabriziogianni7/mercury-agent-wallet)",
+    "Accept": "application/json",
+}
+
+
+def _merge_provider_headers(headers: dict[str, str] | None) -> dict[str, str]:
+    return {**_DEFAULT_HTTP_HEADERS, **(headers or {})}
+
+
 class UrllibJsonHttpClient:
     """Stdlib JSON client for live provider integrations."""
 
@@ -113,7 +126,7 @@ class UrllibJsonHttpClient:
         query = f"?{urlencode(params)}" if params else ""
         request = Request(
             f"{self._base_url}/{path.lstrip('/')}{query}",
-            headers=headers or {},
+            headers=_merge_provider_headers(headers),
             method="GET",
         )
         return self._send(request)
@@ -125,10 +138,12 @@ class UrllibJsonHttpClient:
         payload: dict[str, Any],
         headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
+        merged = _merge_provider_headers(headers)
+        merged["Content-Type"] = "application/json"
         request = Request(
             f"{self._base_url}/{path.lstrip('/')}",
             data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json", **(headers or {})},
+            headers=merged,
             method="POST",
         )
         return self._send(request)
@@ -136,12 +151,41 @@ class UrllibJsonHttpClient:
     def _send(self, request: Request) -> dict[str, Any]:
         try:
             with urlopen(request, timeout=20) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-        except (HTTPError, URLError, OSError, json.JSONDecodeError) as exc:
-            raise SwapProviderError("Swap provider request failed.") from exc
+                raw = response.read().decode("utf-8")
+        except HTTPError as exc:
+            detail = _swap_http_error_detail(exc)
+            raise SwapProviderError(f"Swap provider request failed ({detail}).") from exc
+        except (URLError, OSError) as exc:
+            raise SwapProviderError(
+                f"Swap provider request failed ({type(exc).__name__}: {exc})."
+            ) from exc
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise SwapProviderError(
+                "Swap provider response was not valid JSON (non-JSON body or HTML error page)."
+            ) from exc
         if not isinstance(payload, dict):
             raise SwapProviderError("Swap provider response must be a JSON object.")
         return payload
+
+
+def _swap_http_error_detail(exc: HTTPError) -> str:
+    """Short, log-safe detail for provider HTTP errors (status + optional body snippet)."""
+
+    parts: list[str] = [f"HTTP {exc.code}"]
+    if exc.reason:
+        parts.append(str(exc.reason).strip())
+    try:
+        body = exc.read().decode("utf-8", errors="replace").strip()
+        if body:
+            snippet = body[:400].replace("\n", " ")
+            if len(body) > 400:
+                snippet += "…"
+            parts.append(snippet)
+    except Exception:
+        pass
+    return "; ".join(parts)
 
 
 def provider_api_key(config: SwapProviderConfig) -> str | None:

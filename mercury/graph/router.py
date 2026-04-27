@@ -21,6 +21,7 @@ ROUTE_SIGN_TRANSACTION = "sign_transaction"
 ROUTE_PREPARE_ERC20_TRANSACTION = "prepare_erc20_transaction"
 ROUTE_PREPARE_NATIVE_TRANSACTION = "prepare_native_transaction"
 ROUTE_PREPARE_SWAP_TRANSACTION = "prepare_swap_transaction"
+ROUTE_SWAP_TYPED_ORDER_READY = "swap_typed_order_ready"
 
 _READ_ROUTES = {
     ReadOnlyIntentKind.NATIVE_BALANCE.value: ROUTE_NATIVE_BALANCE,

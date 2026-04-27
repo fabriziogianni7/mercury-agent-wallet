@@ -10,9 +10,14 @@ from pydantic import ValidationError
 
 from mercury.graph.request_metadata import merge_intent_metadata_into_prepared
 from mercury.graph.responses import sanitize_error
+from mercury.graph.router import (
+    ROUTE_REJECT_TRANSACTION,
+    ROUTE_RESOLVE_NONCE,
+    ROUTE_SWAP_TYPED_ORDER_READY,
+)
 from mercury.graph.state import MercuryState
 from mercury.models.policy import PolicyDecision, PolicyDecisionStatus
-from mercury.models.swaps import SwapIntent
+from mercury.models.swaps import SwapExecutionType, SwapIntent
 from mercury.policy.swap_rules import SwapPolicyConfig
 from mercury.swaps.router import SwapRouter
 from mercury.tools.erc20_transactions import PublicAddressResolver
@@ -62,6 +67,15 @@ def make_swap_prepare_node(deps: SwapGraphDependencies) -> Callable[[MercuryStat
             updates["prepared_transaction"] = merged_tx
             return updates
 
+        if (
+            prepared.execution is not None
+            and prepared.execution.execution_type == SwapExecutionType.EIP712_ORDER
+            and prepared.execution_policy_decision is not None
+            and prepared.execution_policy_decision.status == PolicyDecisionStatus.NEEDS_APPROVAL
+        ):
+            updates["policy_decision"] = prepared.execution_policy_decision
+            return updates
+
         decision = prepared.execution_policy_decision or prepared.quote_policy_decision
         if decision.status != PolicyDecisionStatus.REJECTED:
             decision = PolicyDecision(
@@ -72,6 +86,12 @@ def make_swap_prepare_node(deps: SwapGraphDependencies) -> Callable[[MercuryStat
         return updates
 
     return prepare_swap_transaction
+
+
+def end_swap_typed_order_pipeline(state: MercuryState) -> MercuryState:
+    """Typed CoW orders stop here until a dedicated EIP-712 signing path exists."""
+
+    return {}
 
 
 def route_swap_intent(state: MercuryState) -> str:
@@ -87,11 +107,24 @@ def route_swap_intent(state: MercuryState) -> str:
 
 
 def route_after_swap_prepare(state: MercuryState) -> str:
-    """Route swap preparation errors away from signing and broadcast."""
+    """Route EVM swaps into the tx pipeline; typed CoW orders to a terminal node."""
 
-    if state.get("error") or state.get("prepared_transaction") is None:
-        return "reject_transaction"
-    return "resolve_nonce"
+    if state.get("error"):
+        return ROUTE_REJECT_TRANSACTION
+    if state.get("prepared_transaction") is not None:
+        return ROUTE_RESOLVE_NONCE
+    prepared = state.get("prepared_swap")
+    if prepared is not None:
+        ex = prepared.execution
+        ex_dec = prepared.execution_policy_decision
+        if (
+            ex is not None
+            and ex.execution_type == SwapExecutionType.EIP712_ORDER
+            and ex_dec is not None
+            and ex_dec.status == PolicyDecisionStatus.NEEDS_APPROVAL
+        ):
+            return ROUTE_SWAP_TYPED_ORDER_READY
+    return ROUTE_REJECT_TRANSACTION
 
 
 def _swap_payload_from_state(state: MercuryState) -> dict[str, Any]:

@@ -1,12 +1,25 @@
 from datetime import UTC, datetime, timedelta
 
 from mercury.models.swaps import SwapExecutionType, SwapQuoteRequest
-from mercury.swaps.cowswap import CowSwapProvider
+from mercury.swaps.cowswap import CowSwapProvider, cow_network_slug_for_chain_id
 
 TOKEN_IN = "0x000000000000000000000000000000000000cafE"
 TOKEN_OUT = "0x000000000000000000000000000000000000dEaD"
 WALLET = "0x000000000000000000000000000000000000bEEF"
 SPENDER = "0x0000000000000000000000000000000000000002"
+
+
+def test_cow_network_slug_maps_base() -> None:
+    assert cow_network_slug_for_chain_id(8453) == "base"
+
+
+def test_cowswap_quote_uses_network_slug_path_not_chain_id() -> None:
+    client = FakeHttpClient(_response(include_typed_data=True))
+    provider = CowSwapProvider(http_client=client)
+
+    provider.get_quote(_request())
+
+    assert client.paths == ["base/api/v1/quote"]
 
 
 def test_cowswap_quote_normalizes_order_route() -> None:
@@ -17,6 +30,16 @@ def test_cowswap_quote_normalizes_order_route() -> None:
     assert quote.route.spender_address == SPENDER
     assert quote.amount_in_raw == 1_500_000
     assert quote.expected_amount_out_raw == 1_000_000
+
+
+def test_cowswap_build_execution_submit_url_uses_slug() -> None:
+    provider = CowSwapProvider(http_client=FakeHttpClient(_response(include_typed_data=True)))
+    quote = provider.get_quote(_request())
+
+    execution = provider.build_execution(quote)
+
+    assert execution.order is not None
+    assert execution.order.submit_url == "https://api.cow.fi/base/api/v1/orders"
 
 
 def test_cowswap_build_execution_returns_typed_order_when_available() -> None:
@@ -40,9 +63,32 @@ def test_cowswap_build_execution_explicitly_defers_without_typed_data() -> None:
     assert "typed-data" in (execution.unsupported_reason or "")
 
 
+def test_cowswap_submit_order_posts_to_orders_path() -> None:
+    recorded: list[tuple[str, dict[str, object]]] = []
+
+    def post_order(path: str, body: dict[str, object]) -> dict[str, object]:
+        recorded.append((path, body))
+        return {"orderUid": "0xc0ffee"}
+
+    provider = CowSwapProvider(
+        http_client=FakeHttpClient(_response(include_typed_data=True)),
+        post_order=post_order,
+    )
+
+    out = provider.submit_order(
+        chain_id=8453,
+        body={"order": {"foo": "bar"}, "signature": "0xsig", "signingScheme": "eip712"},
+    )
+
+    assert out == {"orderUid": "0xc0ffee"}
+    assert recorded[0][0] == "base/api/v1/orders"
+    assert recorded[0][1]["signingScheme"] == "eip712"
+
+
 class FakeHttpClient:
     def __init__(self, response: dict[str, object]) -> None:
         self._response = response
+        self.paths: list[str] = []
 
     def get_json(
         self,
@@ -60,6 +106,7 @@ class FakeHttpClient:
         payload: dict[str, object],
         headers: dict[str, str] | None = None,
     ) -> dict[str, object]:
+        self.paths.append(path)
         return self._response
 
 

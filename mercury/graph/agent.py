@@ -25,6 +25,7 @@ from mercury.graph.nodes_native import (
 )
 from mercury.graph.nodes_swaps import (
     SwapGraphDependencies,
+    end_swap_typed_order_pipeline,
     make_swap_prepare_node,
     route_after_swap_prepare,
     route_swap_intent,
@@ -58,6 +59,7 @@ from mercury.graph.router import (
     ROUTE_RESOLVE_CHAIN,
     ROUTE_RESOLVE_NONCE,
     ROUTE_SIGN_TRANSACTION,
+    ROUTE_SWAP_TYPED_ORDER_READY,
     ROUTE_UNSUPPORTED,
     route_after_chain,
     route_after_idempotency,
@@ -220,6 +222,7 @@ def build_swap_transaction_graph(
     builder = StateGraph(MercuryState)
     builder.add_node("prepare_swap_transaction", cast(Any, make_swap_prepare_node(swap_deps)))
     builder.add_node("unsupported_response", unsupported_response)
+    builder.add_node("end_swap_typed_order", cast(Any, end_swap_typed_order_pipeline))
     _add_transaction_pipeline(builder, transaction_deps)
 
     builder.add_conditional_edges(
@@ -236,9 +239,11 @@ def build_swap_transaction_graph(
         {
             ROUTE_REJECT_TRANSACTION: "reject_transaction",
             ROUTE_RESOLVE_NONCE: "resolve_nonce",
+            ROUTE_SWAP_TYPED_ORDER_READY: "end_swap_typed_order",
         },
     )
     builder.add_edge("unsupported_response", END)
+    builder.add_edge("end_swap_typed_order", END)
 
     return builder
 
