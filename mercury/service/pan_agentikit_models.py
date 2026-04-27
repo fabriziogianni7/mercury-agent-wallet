@@ -136,6 +136,11 @@ class AgentErrorV1(BaseModel):
     kind: Literal["agent_error"] = "agent_error"
     version: Literal[1] = 1
     code: str
+    category: str = "internal"
     message: str
+    retryable: bool = False
+    recoverable: bool = True
+    user_action: str | None = None
+    llm_action: str | None = None
     details: dict[str, Any] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

@@ -83,7 +83,14 @@ def test_invoke_maps_approval_required_graph_result() -> None:
     assert payload["status"] == "approval_required"
     assert payload["approval_required"] is True
     assert payload["approval_payload"]["status"] == "required"
-    assert payload["error"]["message"] == "Human approval is required before signing idem-1."
+    err = payload["error"]
+    assert err["message"] == "Human approval is required before signing idem-1."
+    assert err["code"] == "approval_required"
+    assert err["category"] == "approval"
+    assert err["retryable"] is True
+    assert err["recoverable"] is True
+    assert err["user_action"]
+    assert err["llm_action"]
 
 
 def test_invoke_maps_transaction_success_result() -> None:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, FastAPI, Header, Request
 
@@ -27,6 +27,33 @@ from mercury.service.models import (
 )
 from mercury.service.pan_agentikit_handler import handle_agent_envelope
 from mercury.service.pan_agentikit_models import PanAgentEnvelope
+
+
+def _mercury_error_from_info(info: MercuryErrorInfo) -> MercuryError:
+    """Map domain error info to API `MercuryError` with redacted text and details."""
+
+    dumped = info.model_dump(mode="json")
+    safe = redact_value(dumped)
+    if not isinstance(safe, dict):
+        safe = {}
+    message = redact_error_message(str(safe.get("message", "")))
+    raw_details = safe.get("details")
+    if isinstance(raw_details, dict):
+        details = cast(dict[str, Any], redact_value(raw_details))
+    else:
+        details = {}
+    ua = safe.get("user_action")
+    la = safe.get("llm_action")
+    return MercuryError(
+        code=str(safe.get("code", "internal_error")),
+        category=str(safe.get("category", "internal")),
+        message=message,
+        retryable=bool(safe.get("retryable", False)),
+        recoverable=bool(safe.get("recoverable", True)),
+        user_action=redact_error_message(ua) if isinstance(ua, str) else None,
+        llm_action=redact_error_message(la) if isinstance(la, str) else None,
+        details=details,
+    )
 
 
 def create_app(
@@ -213,23 +240,19 @@ def _response_from_state(
             receipt=_receipt_payload(execution),
             approval_required=approval_required,
             approval_payload=redact_value(approval) if approval_required else None,
-            error=MercuryError(
-                message=redact_error_message(execution.error.message),
-                code=execution.error.code,
-            )
-            if execution.error
-            else None,
+            error=_mercury_error_from_info(execution.error) if execution.error else None,
         )
 
     if error is not None:
-        message = redact_error_message(error.message)
+        mercury_err = _mercury_error_from_info(error)
+        message = mercury_err.message
         return MercuryInvokeResponse(
             request_id=request_id,
             status="failed",
             chain=chain,
             message=message,
             data=safe_state,
-            error=MercuryError(message=message, code=error.code),
+            error=mercury_err,
         )
 
     message = _response_message(state)

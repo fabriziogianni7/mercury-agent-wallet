@@ -54,10 +54,16 @@ class MercuryInvokeRequest(BaseModel):
 
 
 class MercuryError(BaseModel):
-    """Sanitized error payload."""
+    """Sanitized error payload aligned with `MercuryErrorInfo` for API responses."""
 
+    code: str
+    category: str
     message: str
-    code: str | None = None
+    retryable: bool = False
+    recoverable: bool = True
+    user_action: str | None = None
+    llm_action: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class MercuryInvokeResponse(BaseModel):

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -20,6 +20,8 @@ class MercuryServiceError(RuntimeError):
 
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     public_message = "Mercury request failed."
+    error_code: ClassVar[str] = "internal_error"
+    error_category: ClassVar[str] = "internal"
 
     def __init__(self, message: str | None = None, *, status_code: int | None = None) -> None:
         super().__init__(message or self.public_message)
@@ -32,6 +34,8 @@ class DependencyUnavailableError(MercuryServiceError):
 
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     public_message = "Mercury dependencies are unavailable."
+    error_code = "dependency_unavailable"
+    error_category = "internal"
 
 
 class GraphInvocationError(MercuryServiceError):
@@ -39,6 +43,17 @@ class GraphInvocationError(MercuryServiceError):
 
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     public_message = "Mercury graph invocation failed."
+    error_code = "graph_invocation_failed"
+    error_category = "internal"
+
+
+_LLM_INTERNAL = (
+    "Retry once with backoff. If it still fails, stop and report an internal error "
+    "without exposing raw errors or secrets."
+)
+_LLM_VALIDATION = "Inspect validation details, correct the payload, and retry."
+_LLM_CUSTODY = "Explain the custody constraint and what the user can change."
+_LLM_CHAIN = "Retry with a supported chain name from the service configuration."
 
 
 def install_exception_handlers(app: FastAPI) -> None:
@@ -68,6 +83,12 @@ async def _validation_exception_handler(
         request_id=request_id,
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         message="Request validation failed.",
+        code="validation_failed",
+        category="validation",
+        retryable=False,
+        recoverable=True,
+        user_action="Fix the invalid fields and try again.",
+        llm_action=_LLM_VALIDATION,
         details=details,
     )
 
@@ -81,10 +102,18 @@ async def _service_exception_handler(request: Request, exc: MercuryServiceError)
         path=request.url.path,
         error=exc,
     )
+    msg = redact_error_message(exc)
+    retryable = exc.status_code >= 500
     return _error_response(
         request_id=request_id,
         status_code=exc.status_code,
-        message=redact_error_message(exc),
+        message=msg,
+        code=type(exc).error_code,
+        category=type(exc).error_category,
+        retryable=retryable,
+        recoverable=True,
+        user_action="Try again; contact support if the problem continues.",
+        llm_action=_LLM_INTERNAL,
     )
 
 
@@ -101,6 +130,12 @@ async def _custody_exception_handler(request: Request, exc: CustodyError) -> JSO
         request_id=request_id,
         status_code=status.HTTP_400_BAD_REQUEST,
         message=redact_error_message(exc),
+        code="custody_error",
+        category="policy",
+        retryable=False,
+        recoverable=True,
+        user_action="Adjust the request or wallet configuration.",
+        llm_action=_LLM_CUSTODY,
     )
 
 
@@ -117,6 +152,12 @@ async def _chain_exception_handler(request: Request, exc: UnsupportedChainError)
         request_id=request_id,
         status_code=status.HTTP_400_BAD_REQUEST,
         message=redact_error_message(exc),
+        code="unsupported_chain",
+        category="config",
+        retryable=False,
+        recoverable=True,
+        user_action="Choose a supported chain name.",
+        llm_action=_LLM_CHAIN,
     )
 
 
@@ -133,6 +174,12 @@ async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSON
         request_id=request_id,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         message="Internal server error.",
+        code="internal_error",
+        category="internal",
+        retryable=True,
+        recoverable=True,
+        user_action="Try again; contact support if the problem continues.",
+        llm_action=_LLM_INTERNAL,
     )
 
 
@@ -141,16 +188,40 @@ def _error_response(
     request_id: str | None,
     status_code: int,
     message: str,
-    details: list[dict[str, Any]] | None = None,
+    code: str,
+    category: str,
+    retryable: bool = False,
+    recoverable: bool = True,
+    user_action: str | None = None,
+    llm_action: str | None = None,
+    details: list[dict[str, Any]] | dict[str, Any] | None = None,
 ) -> JSONResponse:
+    safe_message = redact_error_message(message)
+    safe_user = redact_error_message(user_action) if user_action else None
+    safe_llm = redact_error_message(llm_action) if llm_action else None
+    if details is None:
+        safe_details: list[Any] | dict[str, Any] = {}
+    else:
+        safe_details = redact_value(details)
+        if safe_details is None:
+            safe_details = {}
+    if not isinstance(safe_details, dict | list):
+        safe_details = {"value": safe_details}
     payload: dict[str, Any] = {
         "request_id": request_id,
         "status": "error",
-        "message": message,
-        "error": {"message": message},
+        "message": safe_message,
+        "error": {
+            "code": code,
+            "category": category,
+            "message": safe_message,
+            "retryable": retryable,
+            "recoverable": recoverable,
+            "user_action": safe_user,
+            "llm_action": safe_llm,
+            "details": safe_details,
+        },
     }
-    if details is not None:
-        payload["error"]["details"] = details
     return JSONResponse(status_code=status_code, content=payload)
 
 

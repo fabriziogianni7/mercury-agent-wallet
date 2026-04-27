@@ -33,6 +33,16 @@ _SUPPORTED_PAYLOADS = {"user_message", "task_request"}
 _VALUE_MOVING_KINDS = {"erc20_transfer", "erc20_approval", "native_transfer", "swap"}
 
 
+def _adapter_error_category(code: str) -> str:
+    if code in {"invalid_payload", "invalid_mercury_request"}:
+        return "validation"
+    if code == "missing_idempotency_key":
+        return "policy"
+    if code == "unsupported_payload":
+        return "intent"
+    return "internal"
+
+
 def handle_agent_envelope(
     envelope: PanAgentEnvelope,
     *,
@@ -49,12 +59,21 @@ def handle_agent_envelope(
             idempotency_key=idempotency_key,
         )
     except AdapterError as exc:
-        return error_envelope(envelope, code=exc.code, message=str(exc), details=exc.details)
+        return error_envelope(
+            envelope,
+            code=exc.code,
+            message=str(exc),
+            category=_adapter_error_category(exc.code),
+            details=exc.details,
+        )
     except ValidationError as exc:
         return error_envelope(
             envelope,
             code="invalid_mercury_request",
             message="Envelope payload could not be mapped to a valid Mercury request.",
+            category="validation",
+            retryable=False,
+            llm_action="Inspect validation details, correct the envelope, and retry.",
             details={"errors": redact_value(exc.errors())},
         )
 
@@ -73,6 +92,12 @@ def handle_agent_envelope(
             envelope,
             code="graph_invocation_failed",
             message=redact_error_message(exc),
+            category="internal",
+            retryable=True,
+            llm_action=(
+                "Retry once with backoff. If it still fails, stop and report an internal error "
+                "without exposing raw errors or secrets."
+            ),
             metadata=_response_metadata(mercury_request, effective_idempotency_key),
         )
 
@@ -144,14 +169,31 @@ def envelope_from_mercury_response(
         return _reply_envelope(inbound, payload=payload, metadata=metadata)
 
     if native_response.error is not None or native_response.status in {"failed", "rejected"}:
-        message = (
-            native_response.error.message if native_response.error else native_response.message
-        )
-        code = native_response.error.code if native_response.error else None
+        err = native_response.error
+        if err is not None:
+            detail_parts: dict[str, Any] = {}
+            if err.details:
+                detail_parts["error_details"] = dict(err.details)
+            invoke_snap = _result_payload(native_response)
+            if invoke_snap:
+                detail_parts["invoke"] = invoke_snap
+            return error_envelope(
+                inbound,
+                code=err.code,
+                message=err.message,
+                category=err.category,
+                retryable=err.retryable,
+                recoverable=err.recoverable,
+                user_action=err.user_action,
+                llm_action=err.llm_action,
+                details=detail_parts or None,
+                metadata=metadata,
+            )
         return error_envelope(
             inbound,
-            code=code or "mercury_error",
-            message=message,
+            code="mercury_error",
+            message=native_response.message,
+            category="internal",
             details=_result_payload(native_response),
             metadata=metadata,
         )
@@ -185,23 +227,49 @@ def error_envelope(
     *,
     code: str,
     message: str,
+    category: str = "internal",
+    retryable: bool = False,
+    recoverable: bool = True,
+    user_action: str | None = None,
+    llm_action: str | None = None,
     details: dict[str, Any] | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> PanAgentEnvelope:
     """Return a sanitized pan-agentikit error envelope."""
 
     safe_message = redact_error_message(message)
-    safe_details = redact_value(details) if details is not None else None
+    raw_details = redact_value(details) if details is not None else None
+    if raw_details is not None and not isinstance(raw_details, dict):
+        safe_details: dict[str, Any] | None = {"value": raw_details}
+    else:
+        safe_details = raw_details
+    safe_user = redact_error_message(user_action) if user_action else None
+    safe_llm = redact_error_message(llm_action) if llm_action else None
     payload = AgentErrorV1(
         code=code,
+        category=category,
         message=safe_message,
+        retryable=retryable,
+        recoverable=recoverable,
+        user_action=safe_user,
+        llm_action=safe_llm,
         details=safe_details,
         metadata=metadata or {},
     ).model_dump(mode="json")
+    error_body: dict[str, Any] = {
+        "code": code,
+        "category": category,
+        "message": safe_message,
+        "retryable": retryable,
+        "recoverable": recoverable,
+        "user_action": safe_user,
+        "llm_action": safe_llm,
+        "details": safe_details if safe_details is not None else {},
+    }
     return _reply_envelope(
         inbound,
         payload=payload,
-        error={"code": code, "message": safe_message, "details": safe_details},
+        error=error_body,
         metadata=metadata or {},
     )
 

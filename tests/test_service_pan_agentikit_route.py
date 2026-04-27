@@ -96,7 +96,11 @@ def test_agent_route_returns_error_envelope_for_graph_exception() -> None:
     payload = response.json()
     assert payload["payload"]["kind"] == "agent_error"
     assert payload["payload"]["code"] == "graph_invocation_failed"
+    assert payload["payload"]["category"] == "internal"
+    assert payload["payload"]["retryable"] is True
     assert payload["error"]["message"] == "boom <redacted> <redacted>"
+    assert payload["error"]["category"] == "internal"
+    assert payload["error"]["retryable"] is True
 
 
 class CapturingRuntime:
