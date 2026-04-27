@@ -8,8 +8,8 @@ from typing import Any, Protocol
 from eth_typing import HexStr
 from hexbytes import HexBytes
 
-from mercury.graph.responses import sanitize_error
 from mercury.models.approval import ApprovalRequest, ApprovalResult, ApprovalStatus
+from mercury.models.errors import normalize_exception
 from mercury.models.execution import (
     ExecutableTransaction,
     ExecutionStatus,
@@ -186,7 +186,8 @@ class Web3TransactionBackend:
                     )
             return SimulationResult(status=SimulationStatus.PASSED, gas_estimate=gas_estimate)
         except Exception as exc:
-            return SimulationResult(status=SimulationStatus.FAILED, reason=sanitize_error(exc))
+            err = normalize_exception(exc, code="simulation_failed", stage="simulate")
+            return SimulationResult(status=SimulationStatus.FAILED, reason=err.message)
 
     def broadcast(self, signed_transaction: SignedTransactionResult) -> str:
         provider = self._provider_factory.create(_chain_name_for_id(signed_transaction.chain_id))

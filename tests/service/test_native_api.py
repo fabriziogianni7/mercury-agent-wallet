@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from mercury.graph.state import MercuryState
 from mercury.models import ExecutionResult, ExecutionStatus
 from mercury.models.approval import ApprovalResult, ApprovalStatus
+from mercury.models.errors import approval_required
 from mercury.service import create_app
 
 
@@ -49,7 +50,9 @@ def test_native_api_preserves_approval_required_shape() -> None:
         chain_id=8453,
         wallet_id="primary",
         status=ExecutionStatus.APPROVAL_DENIED,
-        error="Human approval is required before signing idem-approval.",
+        error=approval_required(
+            message="Human approval is required before signing idem-approval.",
+        ),
     )
     approval = ApprovalResult(
         status=ApprovalStatus.REQUIRED,

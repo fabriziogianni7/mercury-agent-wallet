@@ -11,9 +11,9 @@ from mercury.graph.responses import (
     format_error_response,
     format_success_response,
     format_unsupported_response,
-    sanitize_error,
 )
 from mercury.graph.state import MercuryState
+from mercury.models.errors import MercuryErrorInfo, normalize_exception
 from mercury.tools.registry import ReadOnlyToolRegistry
 
 
@@ -23,7 +23,7 @@ def parse_intent(state: MercuryState) -> MercuryState:
     try:
         parsed_intent = parse_readonly_intent(state.get("raw_input"), state.get("messages"))
     except UnsupportedIntentError as exc:
-        return {"error": sanitize_error(exc)}
+        return {"error": normalize_exception(exc, stage="parse_intent")}
 
     return {
         "parsed_intent": parsed_intent.model_dump(mode="json"),
@@ -42,7 +42,10 @@ def resolve_chain(state: MercuryState) -> MercuryState:
     try:
         chain_config = get_chain_by_name(chain_name)
     except UnsupportedChainError as exc:
-        return {"error": sanitize_error(exc), "chain_name": chain_name}
+        return {
+            "error": normalize_exception(exc, stage="resolve_chain"),
+            "chain_name": chain_name,
+        }
 
     return {
         "chain_name": chain_config.name,
@@ -65,7 +68,7 @@ def make_read_tool_node(
             return {
                 "selected_tool_name": tool_name,
                 "tool_input": tool_input,
-                "error": sanitize_error(exc),
+                "error": normalize_exception(exc, stage=f"read_tool:{tool_name}"),
             }
 
         return {
@@ -98,8 +101,10 @@ def unsupported_response(state: MercuryState) -> MercuryState:
     """Return a clear response for unsupported or invalid intents."""
 
     parsed_intent = state.get("parsed_intent", {})
-    reason = state.get("error")
-    if reason is None:
+    error_info = state.get("error")
+    if error_info is not None:
+        reason: str | MercuryErrorInfo = error_info
+    else:
         raw_reason = parsed_intent.get("reason")
         reason = raw_reason if isinstance(raw_reason, str) else "Unsupported wallet intent."
 

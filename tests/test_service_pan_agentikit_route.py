@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 from mercury.graph.state import MercuryState
 from mercury.models import ExecutionResult, ExecutionStatus
 from mercury.models.approval import ApprovalResult, ApprovalStatus
+from mercury.models.errors import approval_required
 from mercury.service import create_app
 
 from tests.fixtures.pan_agentikit_envelopes import envelope_fixture
@@ -61,7 +62,9 @@ def test_agent_route_maps_approval_required_envelope() -> None:
         chain_id=8453,
         wallet_id="primary",
         status=ExecutionStatus.APPROVAL_DENIED,
-        error="Human approval is required before signing idem-transfer-1.",
+        error=approval_required(
+            message="Human approval is required before signing idem-transfer-1.",
+        ),
     )
     approval = ApprovalResult(
         status=ApprovalStatus.REQUIRED,

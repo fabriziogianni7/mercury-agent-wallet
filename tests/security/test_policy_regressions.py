@@ -61,7 +61,7 @@ def test_missing_idempotency_key_rejects_before_signing_even_after_approval() ->
     result = graph.invoke({"raw_input": _prepared_transaction(idempotency_key=None)})
 
     assert result["execution_result"].status == ExecutionStatus.REJECTED
-    assert "Idempotency key" in result["execution_result"].error
+    assert "Idempotency key" in result["execution_result"].error.message
     assert signer.sign_calls == 0
     assert "sign" not in events
     assert "broadcast" not in events

@@ -5,19 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from mercury.graph.intents import ReadOnlyIntentKind
-
-_SECRET_MARKERS = ("http://", "https://", "mercury/rpc/", "private_key")
+from mercury.models.errors import MercuryErrorInfo
 
 
 def sanitize_error(error: BaseException | str) -> str:
-    """Return a user-safe error string without RPC URLs or secret paths."""
+    """Return a user-safe error string (legacy helper; uses service redaction)."""
 
-    message = str(error)
-    if not message:
-        return "The read-only request failed."
-    if any(marker in message for marker in _SECRET_MARKERS):
-        return "The read-only request failed because required chain configuration is unavailable."
-    return message
+    from mercury.service.logging import redact_error_message
+
+    return redact_error_message(error)
 
 
 def format_success_response(
@@ -58,16 +54,22 @@ def format_success_response(
     return "Read-only request completed."
 
 
-def format_error_response(error: str) -> str:
+def _error_text(error: str | MercuryErrorInfo) -> str:
+    if isinstance(error, MercuryErrorInfo):
+        return error.message
+    return sanitize_error(error)
+
+
+def format_error_response(error: str | MercuryErrorInfo) -> str:
     """Format a sanitized error response."""
 
-    return f"I could not complete the read-only request: {sanitize_error(error)}"
+    return f"I could not complete the read-only request: {_error_text(error)}"
 
 
-def format_unsupported_response(reason: str) -> str:
+def format_unsupported_response(reason: str | MercuryErrorInfo) -> str:
     """Format unsupported intents without suggesting execution happened."""
 
-    return f"Unsupported operation: {sanitize_error(reason)}"
+    return f"Unsupported operation: {_error_text(reason)}"
 
 
 def _symbol(tool_result: dict[str, Any]) -> str:

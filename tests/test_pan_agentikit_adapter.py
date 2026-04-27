@@ -1,6 +1,7 @@
 from mercury.graph.state import MercuryState
 from mercury.models import ExecutionResult, ExecutionStatus
 from mercury.models.approval import ApprovalResult, ApprovalStatus
+from mercury.models.errors import approval_required, internal_error
 from mercury.service.pan_agentikit_handler import (
     handle_agent_envelope,
     mercury_request_from_envelope,
@@ -77,7 +78,9 @@ def test_approval_required_result_maps_to_wallet_approval_payload() -> None:
         chain_id=8453,
         wallet_id="primary",
         status=ExecutionStatus.APPROVAL_DENIED,
-        error="Human approval is required before signing idem-transfer-1.",
+        error=approval_required(
+            message="Human approval is required before signing idem-transfer-1.",
+        ),
     )
     approval = ApprovalResult(
         status=ApprovalStatus.REQUIRED,
@@ -101,8 +104,11 @@ def test_graph_state_error_maps_to_sanitized_error_envelope() -> None:
     runtime = CapturingRuntime(
         {
             "chain_name": "base",
-            "error": (
-                "failed using https://rpc.example.invalid and mercury/wallets/primary/private_key"
+            "error": internal_error(
+                message=(
+                    "failed using https://rpc.example.invalid and "
+                    "mercury/wallets/primary/private_key"
+                )
             ),
         }
     )

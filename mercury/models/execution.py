@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from mercury.models.addresses import normalize_evm_address
+from mercury.models.errors import MercuryErrorInfo
 from mercury.models.gas import GasFees
 from mercury.models.policy import PolicyDecision
 from mercury.models.transactions import HexData, PreparedEVMTransaction
@@ -134,7 +135,7 @@ class ExecutionResult(BaseModel):
     block_number: int | None = Field(default=None, ge=0)
     gas_used: int | None = Field(default=None, ge=0)
     policy_decision: PolicyDecision | None = None
-    error: str | None = None
+    error: MercuryErrorInfo | None = None
 
     @field_validator("wallet_address")
     @classmethod

@@ -94,8 +94,8 @@ def test_unsupported_chain_is_rejected() -> None:
 
     update = resolve_chain(state)
 
-    assert "Unsupported chain name" in update["error"]
-    assert "https://" not in update["error"]
+    assert "Unsupported chain name" in update["error"].message
+    assert "https://" not in update["error"].message
 
 
 def _state_for(raw_input: dict[str, object]) -> MercuryState:

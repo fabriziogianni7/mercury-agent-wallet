@@ -51,7 +51,8 @@ def test_fake_tool_error_becomes_sanitized_response() -> None:
 
     assert "https://" not in result["response_text"]
     assert "mercury/rpc/" not in result["response_text"]
-    assert "required chain configuration is unavailable" in result["response_text"]
+    assert "I could not complete the read-only request" in result["response_text"]
+    assert "<redacted>" in result["response_text"]
 
 
 def test_value_moving_text_is_rejected_without_tool_execution() -> None:
