@@ -25,7 +25,7 @@ class MercurySettings(BaseSettings):
 
     lifi_api_secret_path: str = Field(
         default="mercury/apis/lifi",
-        description="1Claw secret path for Li.Fi API configuration.",
+        description="1Claw path for an optional LiFi key; if unset, no x-lifi-api-key (public tier).",
     )
     cowswap_api_secret_path: str = Field(
         default="mercury/apis/cowswap",

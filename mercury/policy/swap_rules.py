@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from mercury.chains import UnsupportedChainError, get_chain_by_name
+from mercury.chains import UnsupportedChainError, get_chain_by_id, get_chain_by_name
 from mercury.models.addresses import normalize_evm_address
 from mercury.models.execution import ExecutableTransaction, PreparedTransaction
 from mercury.models.policy import PolicyDecision, PolicyDecisionStatus
@@ -99,8 +99,13 @@ def swap_quote_rejection_reason(
         and quote.route.route_kind != SwapRouteKind.BRIDGE
     ):
         return "Swap route destination chain mismatch is not marked as a bridge."
-    if quote.route.route_kind == SwapRouteKind.BRIDGE and not policy.allow_bridges:
-        return "Bridge routes require explicit user approval and are disabled by default."
+    if quote.route.route_kind == SwapRouteKind.BRIDGE:
+        try:
+            get_chain_by_id(quote.route.to_chain_id)
+        except UnsupportedChainError as exc:
+            return str(exc)
+        if not policy.allow_bridges:
+            return "Bridge routes require explicit user approval and are disabled by default."
     if quote.route.spender_address is None:
         return "Swap route spender is missing."
     if (

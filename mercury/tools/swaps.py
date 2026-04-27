@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from mercury.chains import get_chain_by_name
+from mercury.chains import get_chain_by_id, get_chain_by_name
 from mercury.models.erc20 import ERC20Amount
 from mercury.models.execution import PreparedTransaction
 from mercury.models.policy import PolicyDecision, PolicyDecisionStatus
@@ -73,6 +73,18 @@ def prepare_swap(
 
     wallet = address_resolver.get_wallet_address(intent.wallet_id)
     chain = get_chain_by_name(intent.chain)
+    to_chain: str | None = None
+    to_chain_id: int | None = None
+    if intent.to_chain is not None:
+        dest = get_chain_by_name(intent.to_chain)
+        if intent.to_chain_id is not None and dest.chain_id != intent.to_chain_id:
+            raise ValueError("Destination chain name does not match destination chain id.")
+        to_chain_id = dest.chain_id
+        to_chain = dest.name
+    elif intent.to_chain_id is not None:
+        dest = get_chain_by_id(intent.to_chain_id)
+        to_chain_id = dest.chain_id
+        to_chain = dest.name
     token_metadata = get_erc20_metadata(
         chain=chain.name,
         token_address=intent.from_token,
@@ -95,6 +107,8 @@ def prepare_swap(
         min_amount_out=intent.min_amount_out,
         recipient_address=intent.recipient_address,
         idempotency_key=intent.idempotency_key,
+        to_chain=to_chain,
+        to_chain_id=to_chain_id,
     )
     quote = router.get_quote(request, provider_preference=intent.provider_preference)
     quote_decision = evaluate_swap_quote_policy(quote, config=policy_config)

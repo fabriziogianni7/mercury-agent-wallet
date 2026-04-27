@@ -52,10 +52,22 @@ class SwapIntent(BaseModel):
     provider_preference: SwapProviderName | None = None
     recipient_address: str | None = Field(default=None, min_length=1)
     idempotency_key: str = Field(min_length=1)
+    to_chain: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Optional destination chain; with to_chain_id enables bridge swaps.",
+    )
+    to_chain_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="Optional destination EVM chain id; when set and differs from the source, requests a bridge.",
+    )
 
-    @field_validator("chain")
+    @field_validator("chain", "to_chain")
     @classmethod
-    def normalize_chain(cls, value: str) -> str:
+    def normalize_intent_chain_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return value.strip().lower()
 
     @field_validator("from_token", "to_token", "recipient_address")
@@ -69,6 +81,16 @@ class SwapIntent(BaseModel):
     def validate_tokens(self) -> SwapIntent:
         if self.from_token == self.to_token:
             raise ValueError("Swap tokens must be different.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_bridge_fields(self) -> SwapIntent:
+        if self.to_chain is not None and self.to_chain_id is not None:
+            from mercury.chains import get_chain_by_name
+
+            chain = get_chain_by_name(self.to_chain)
+            if chain.chain_id != self.to_chain_id:
+                raise ValueError("to_chain and to_chain_id must refer to the same network.")
         return self
 
 
@@ -89,10 +111,22 @@ class SwapQuoteRequest(BaseModel):
     min_amount_out: str | None = Field(default=None, min_length=1)
     recipient_address: str | None = Field(default=None, min_length=1)
     idempotency_key: str = Field(min_length=1)
+    to_chain: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Optional destination chain name; must align with to_chain_id when both are set.",
+    )
+    to_chain_id: int | None = Field(
+        default=None,
+        gt=0,
+        description="When None, the quote is same-chain; otherwise the expected destination chain id (bridge).",
+    )
 
-    @field_validator("chain")
+    @field_validator("chain", "to_chain")
     @classmethod
-    def normalize_chain(cls, value: str) -> str:
+    def normalize_request_chain_fields(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return value.strip().lower()
 
     @field_validator("wallet_address", "from_token", "to_token", "recipient_address")
@@ -107,6 +141,16 @@ class SwapQuoteRequest(BaseModel):
         """Return the recipient address used by the provider request."""
 
         return self.recipient_address or self.wallet_address
+
+    @model_validator(mode="after")
+    def validate_request_destination(self) -> SwapQuoteRequest:
+        if self.to_chain is not None and self.to_chain_id is not None:
+            from mercury.chains import get_chain_by_name
+
+            chain = get_chain_by_name(self.to_chain)
+            if chain.chain_id != self.to_chain_id:
+                raise ValueError("to_chain and to_chain_id must refer to the same network.")
+        return self
 
 
 class SwapRoute(BaseModel):
@@ -170,6 +214,13 @@ class SwapQuote(BaseModel):
             raise ValueError("Quote amount_in_raw must match the request amount.")
         if self.route.from_chain_id != self.request.chain_id:
             raise ValueError("Route source chain must match the request chain.")
+        if self.request.to_chain_id is None:
+            if self.route.to_chain_id != self.request.chain_id:
+                raise ValueError(
+                    "Route destination chain must match the request chain for same-chain quotes."
+                )
+        elif self.route.to_chain_id != self.request.to_chain_id:
+            raise ValueError("Route destination chain must match the request destination chain.")
         if self.route.from_token != self.request.from_token:
             raise ValueError("Route source token must match the request token.")
         if self.route.to_token != self.request.to_token:

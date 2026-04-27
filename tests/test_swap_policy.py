@@ -1,7 +1,13 @@
 from datetime import UTC, datetime, timedelta
 
 from mercury.models.policy import PolicyDecisionStatus
-from mercury.models.swaps import SwapProviderName, SwapQuote, SwapQuoteRequest, SwapRoute
+from mercury.models.swaps import (
+    SwapProviderName,
+    SwapQuote,
+    SwapQuoteRequest,
+    SwapRoute,
+    SwapRouteKind,
+)
 from mercury.policy.swap_rules import SwapPolicyConfig, evaluate_swap_quote_policy
 
 TOKEN_IN = "0x000000000000000000000000000000000000cafE"
@@ -43,6 +49,23 @@ def test_swap_policy_allows_safe_quote() -> None:
     assert decision.status == PolicyDecisionStatus.ALLOWED
 
 
+def test_swap_policy_rejects_bridge_when_allow_bridges_false() -> None:
+    decision = evaluate_swap_quote_policy(
+        _bridge_quote(),
+        config=SwapPolicyConfig(allow_bridges=False),
+    )
+    assert decision.status == PolicyDecisionStatus.REJECTED
+    assert "bridge" in decision.reason.lower() or "disabled" in decision.reason.lower()
+
+
+def test_swap_policy_allows_bridge_when_allow_bridges_true() -> None:
+    decision = evaluate_swap_quote_policy(
+        _bridge_quote(),
+        config=SwapPolicyConfig(allow_bridges=True),
+    )
+    assert decision.status == PolicyDecisionStatus.ALLOWED
+
+
 def _quote(
     *,
     slippage_bps: int = 50,
@@ -78,5 +101,42 @@ def _quote(
         min_amount_out_raw=990_000,
         slippage_bps=slippage_bps,
         expires_at=expires_at or datetime.now(tz=UTC) + timedelta(minutes=5),
+        recipient_address=WALLET,
+    )
+
+
+def _bridge_quote() -> SwapQuote:
+    request = SwapQuoteRequest(
+        wallet_id="primary",
+        wallet_address=WALLET,
+        chain="base",
+        chain_id=8453,
+        from_token=TOKEN_IN,
+        to_token=TOKEN_OUT,
+        amount_in="1.5",
+        amount_in_raw=1_500_000,
+        max_slippage_bps=50,
+        idempotency_key="swap-1",
+        to_chain="ethereum",
+        to_chain_id=1,
+    )
+    return SwapQuote(
+        provider=SwapProviderName.LIFI,
+        request=request,
+        route=SwapRoute(
+            provider=SwapProviderName.LIFI,
+            route_id="route-bridge-1",
+            route_kind=SwapRouteKind.BRIDGE,
+            from_chain_id=8453,
+            to_chain_id=1,
+            from_token=TOKEN_IN,
+            to_token=TOKEN_OUT,
+            spender_address=SPENDER,
+        ),
+        amount_in_raw=1_500_000,
+        expected_amount_out_raw=1_000_000,
+        min_amount_out_raw=990_000,
+        slippage_bps=50,
+        expires_at=datetime.now(tz=UTC) + timedelta(minutes=5),
         recipient_address=WALLET,
     )
