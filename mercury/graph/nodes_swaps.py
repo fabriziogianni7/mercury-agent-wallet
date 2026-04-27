@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from mercury.graph.request_metadata import merge_intent_metadata_into_prepared
 from mercury.graph.responses import sanitize_error
 from mercury.graph.state import MercuryState
 from mercury.models.policy import PolicyDecision, PolicyDecisionStatus
@@ -34,7 +35,8 @@ def make_swap_prepare_node(deps: SwapGraphDependencies) -> Callable[[MercuryStat
 
     def prepare_swap_transaction(state: MercuryState) -> MercuryState:
         try:
-            intent = SwapIntent.model_validate(_swap_payload_from_state(state))
+            raw_payload = _swap_payload_from_state(state)
+            intent = SwapIntent.model_validate(raw_payload)
             prepared = prepare_swap(
                 intent=intent,
                 router=deps.router,
@@ -53,7 +55,11 @@ def make_swap_prepare_node(deps: SwapGraphDependencies) -> Callable[[MercuryStat
             "wallet_address": prepared.quote.request.wallet_address,
         }
         if prepared.next_transaction is not None:
-            updates["prepared_transaction"] = prepared.next_transaction
+            merged_tx = merge_intent_metadata_into_prepared(
+                prepared.next_transaction,
+                raw_payload,
+            )
+            updates["prepared_transaction"] = merged_tx
             return updates
 
         decision = prepared.execution_policy_decision or prepared.quote_policy_decision

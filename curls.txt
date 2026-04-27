@@ -1,0 +1,260 @@
+# Mercury + 1Claw E2E curl recipes
+#
+# Before running: start Mercury with real 1Claw env (see .env.example), e.g.
+#   export MERCURY_ONECLAW_BASE_URL=https://api.1claw.xyz
+#   export MERCURY_ONECLAW_VAULT_ID=<your-vault-uuid>
+#   export MERCURY_ONECLAW_API_KEY=<your-agent-api-key>
+#   export MERCURY_ONECLAW_AGENT_ID=<your-agent-uuid>   # recommended for hosted 1Claw
+#   uv run uvicorn mercury.service.api:app --reload --host 127.0.0.1 --port 8000
+#
+# In 1Claw, ensure the agent can read:
+#   mercury/rpc/base (and/or mercury/rpc/ethereum)
+#   mercury/wallets/<wallet_id>/private_key   (only needed for signing / value-moving flows)
+#
+# Replace placeholders below:
+#   YOUR_WALLET_ADDRESS — must match the EVM address for private key at mercury/wallets/primary/private_key
+#   YOUR_RECIPIENT — any valid 0x address you control for transfer tests
+#   BASE — http://127.0.0.1:8000 (or your deployed host)
+
+# -----------------------------------------------------------------------------
+# 1) Mint a short-lived JWT from 1Claw (optional sanity check outside Mercury)
+#
+# Confirms MERCURY_ONECLAW_AGENT_ID + API key pair. Use the access_token from the
+# JSON response as Bearer for direct vault API calls (step 2).
+# -----------------------------------------------------------------------------
+curl -sS -X POST "${MERCURY_ONECLAW_BASE_URL:-https://api.1claw.xyz}/v1/auth/agent-token" \
+  -H "Content-Type: application/json" \
+  -d "{\"agent_id\": \"${MERCURY_ONECLAW_AGENT_ID}\", \"api_key\": \"${MERCURY_ONECLAW_API_KEY}\"}"
+
+# -----------------------------------------------------------------------------
+# 2) Read one RPC secret directly from 1Claw (optional; same path Mercury uses)
+#
+# Verifies vault id, agent token scopes, and that mercury/rpc/base exists. A 403
+# usually means the agent is not granted that vault or path — fix in 1Claw before
+# testing Mercury invokes.
+# Replace ACCESS_TOKEN with the JWT from step 1.
+# -----------------------------------------------------------------------------
+curl -sS "${MERCURY_ONECLAW_BASE_URL:-https://api.1claw.xyz}/v1/vaults/${MERCURY_ONECLAW_VAULT_ID}/secrets/mercury/rpc/base" \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+
+# -----------------------------------------------------------------------------
+# 3) Liveness — process is up (no 1Claw call)
+# -----------------------------------------------------------------------------
+curl -sS http://127.0.0.1:8000/healthz
+
+# -----------------------------------------------------------------------------
+# 4) Readiness — settings + chain registry OK (still no wallet or RPC fetch)
+# -----------------------------------------------------------------------------
+curl -sS http://127.0.0.1:8000/readyz
+
+# -----------------------------------------------------------------------------
+# 5) Native balance on Base (read-only; hits 1Claw for RPC only)
+#
+# wallet_address can be any address to inspect; use YOUR_WALLET_ADDRESS to confirm
+# the same account you store in 1Claw for signing tests.
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-native-balance-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "chain": "base",
+    "intent": {
+      "kind": "native_balance",
+      "wallet_address": "0xC1923710468607b8B7DB38a6AfBB9B432744390c"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 6) ERC20 metadata — USDC on Base (read-only)
+#
+# Token: Base USDC 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-erc20-meta-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "intent": {
+      "kind": "erc20_metadata",
+      "chain": "base",
+      "token_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 7) ERC20 balance — USDC for your wallet (read-only)
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-erc20-balance-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "intent": {
+      "kind": "erc20_balance",
+      "chain": "base",
+      "token_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "wallet_address": "0xC1923710468607b8B7DB38a6AfBB9B432744390c"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 8) ERC20 allowance (read-only) — owner YOUR_WALLET, spender e.g. a router you care about
+#
+# Example spender: Uniswap V3 SwapRouter02 on Base (replace if you test another protocol).
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-allowance-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "intent": {
+      "kind": "erc20_allowance",
+      "chain": "base",
+      "token_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "owner_address": "YOUR_WALLET_ADDRESS",
+      "spender_address": "0x2626664c2603336E57B271c5C0b26F421741e481"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 9) Contract read — USDC decimals() on Base (read-only)
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-contract-read-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "intent": {
+      "kind": "contract_read",
+      "chain": "base",
+      "contract_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "abi_fragment": [
+        {
+          "type": "function",
+          "name": "decimals",
+          "stateMutability": "view",
+          "inputs": [],
+          "outputs": [{"type": "uint8", "name": ""}]
+        }
+      ],
+      "function_name": "decimals",
+      "args": []
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 10) ERC20 transfer — value-moving (loads mercury/wallets/primary/private_key)
+#
+# Requires Idempotency-Key. For the two-step approval flow with (10b), use the same
+# fixed key here and in (10b) (e.g. e2e-erc20-transfer-manual-1). Otherwise use
+# a unique key per attempt. Use a tiny amount and a token you own.
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-erc20-transfer-1" \
+  -H "Idempotency-Key: e2e-erc20-transfer-manual-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "intent": {
+      "kind": "erc20_transfer",
+      "chain": "base",
+      "wallet_id": "primary",
+      "token_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "recipient_address": "0x7a3E29106D238334B7134Ddd824b7923BCF717d2",
+      "amount": "0.01"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 10b) Same ERC20 transfer — submit human approval (second request)
+#
+# After (10), if the response is approval_required, repeat the SAME intent and the
+# SAME Idempotency-Key as (10), and add a top-level approval_response. Mercury
+# merges that into transaction metadata and the approver will only sign when
+# status is "approved". Optional: set approval_response.idempotency_key to the same
+# key as the Idempotency-Key header to bind approval to this attempt.
+#
+# Use a fixed key for both calls, e.g. export IDEM=e2e-erc20-transfer-manual-1
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-erc20-transfer-2" \
+  -H "Idempotency-Key: e2e-erc20-transfer-manual-1" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "approval_response": {
+      "status": "approved",
+      "approved_by": "e2e-operator",
+      "reason": "Confirmed transfer out-of-band",
+      "idempotency_key": "e2e-erc20-transfer-manual-1"
+    },
+    "intent": {
+      "kind": "erc20_transfer",
+      "chain": "base",
+      "wallet_id": "primary",
+      "token_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "recipient_address": "0x7a3E29106D238334B7134Ddd824b7923BCF717d2",
+      "amount": "0.01"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 11) Swap quote / prepare — value-moving path (needs swap provider + often mercury/apis/lifi in 1Claw)
+#
+# Also requires Idempotency-Key on the intent. This exercises RPC + optional LiFi key
+# from 1Claw; may return policy or approval gates like other tx flows.
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/mercury/invoke \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-swap-1" \
+  -H "Idempotency-Key: e2e-swap-$(date +%s)" \
+  -d '{
+    "user_id": "e2e-user",
+    "wallet_id": "primary",
+    "intent": {
+      "kind": "swap",
+      "chain": "base",
+      "wallet_id": "primary",
+      "from_token": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "to_token": "0x4200000000000000000000000000000000000006",
+      "amount_in": "1",
+      "max_slippage_bps": 100,
+      "provider_preference": "lifi"
+    }
+  }'
+
+# -----------------------------------------------------------------------------
+# 12) Pan-agentikit envelope — natural-language style path to the same graph
+#
+# Coordinator → Mercury; metadata carries user_id, wallet_id, chain for downstream state.
+# -----------------------------------------------------------------------------
+curl -sS -X POST http://127.0.0.1:8000/v1/agent \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: e2e-envelope-1" \
+  -d '{
+    "schema_version": "1",
+    "id": "env-e2e-1",
+    "trace_id": "trace-e2e-1",
+    "turn_id": "turn-1",
+    "step_id": "step-1",
+    "from_role": "coordinator",
+    "to_role": "mercury",
+    "metadata": {
+      "user_id": "e2e-user",
+      "wallet_id": "primary",
+      "chain": "base"
+    },
+    "payload": {
+      "kind": "user_message",
+      "version": 1,
+      "text": "What is the native balance of 0xC1923710468607b8B7DB38a6AfBB9B432744390c on base?"
+    }
+  }'

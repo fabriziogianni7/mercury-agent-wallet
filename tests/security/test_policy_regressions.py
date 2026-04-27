@@ -75,7 +75,7 @@ def test_chain_mismatch_and_unlimited_approval_are_rejected_by_policy() -> None:
     unlimited_approval = TransactionPolicyEngine().evaluate(
         _executable(
             value_wei=0,
-            data="0x095ea7b3",
+            data=("0x095ea7b3" + f"{int(SPENDER, 16):064x}" + f"{MAX_UINT256:064x}"),
             metadata={
                 "action": ERC20Action.APPROVAL.value,
                 "token_address": TOKEN,

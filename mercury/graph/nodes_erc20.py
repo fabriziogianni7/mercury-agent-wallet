@@ -8,6 +8,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from mercury.graph.request_metadata import merge_intent_metadata_into_prepared
 from mercury.graph.responses import sanitize_error
 from mercury.graph.state import MercuryState
 from mercury.models.erc20 import (
@@ -70,6 +71,7 @@ def make_erc20_prepare_node(deps: ERC20GraphDependencies) -> Callable[[MercurySt
         except Exception as exc:
             return {"error": sanitize_error(exc)}
 
+        prepared = merge_intent_metadata_into_prepared(prepared, payload)
         return {
             "prepared_transaction": prepared,
             "chain_name": prepared.chain,

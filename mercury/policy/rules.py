@@ -65,6 +65,18 @@ def erc20_policy_reason(
 
     action = transaction.metadata.get("action")
     if action == ERC20Action.TRANSFER.value:
+        try:
+            token = _metadata_address(transaction, "token_address")
+        except ValueError:
+            return "ERC20 transfer metadata is missing token_address."
+        if normalize_evm_address(transaction.to) != token:
+            return "ERC20 transfer `to` must be the token contract address."
+        if transaction.value_wei != 0:
+            return "ERC20 transfer must not send native token value."
+        data = transaction.data if isinstance(transaction.data, str) else "0x"
+        if not data.lower().startswith("0xa9059cbb") or len(data) < 138:
+            return "ERC20 transfer calldata must be a standard transfer(address,uint256) call."
+
         recipient = _metadata_address(transaction, "recipient_address")
         if recipient == normalize_evm_address(ZERO_ADDRESS):
             return "ERC20 transfer recipient must not be the zero address."
@@ -74,6 +86,18 @@ def erc20_policy_reason(
         return None
 
     if action == ERC20Action.APPROVAL.value:
+        try:
+            token = _metadata_address(transaction, "token_address")
+        except ValueError:
+            return "ERC20 approval metadata is missing token_address."
+        if normalize_evm_address(transaction.to) != token:
+            return "ERC20 approval `to` must be the token contract address."
+        if transaction.value_wei != 0:
+            return "ERC20 approval must not send native token value."
+        data = transaction.data if isinstance(transaction.data, str) else "0x"
+        if not data.lower().startswith("0x095ea7b3") or len(data) < 138:
+            return "ERC20 approval calldata must be a standard approve(address,uint256) call."
+
         spender = _metadata_address(transaction, "spender_address")
         if spender == normalize_evm_address(ZERO_ADDRESS):
             return "ERC20 approval spender must not be the zero address."

@@ -30,7 +30,7 @@ from mercury.swaps.router import SwapRouter
 from mercury.swaps.uniswap import UniswapProvider
 from mercury.tools.registry import ReadOnlyToolRegistry
 from mercury.tools.transactions import (
-    PlaceholderTransactionApprover,
+    RequestMetadataTransactionApprover,
     Web3TransactionBackend,
 )
 
@@ -107,7 +107,7 @@ def get_graph_runtime(request: Request) -> GraphRuntime:
         backend=Web3TransactionBackend(provider_factory),
         signer=signer,
         policy_engine=TransactionPolicyEngine(),
-        approver=PlaceholderTransactionApprover(),
+        approver=RequestMetadataTransactionApprover(),
         idempotency_store=InMemoryIdempotencyStore(),
     )
     runtime = build_default_runtime(

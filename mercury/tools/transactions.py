@@ -75,10 +75,56 @@ class PlaceholderTransactionApprover:
     def request_approval(self, request: ApprovalRequest) -> ApprovalResult:
         """Return a required approval result until a human approval runtime is wired."""
 
+        return _default_required_approval(request)
+
+
+class RequestMetadataTransactionApprover:
+    """Approve only when the inbound HTTP request included an explicit approval payload.
+
+    ``ApprovalRequest.metadata`` is populated from the prepared transaction, which
+    merges service intent metadata (including ``approval_response`` from
+    ``MercuryInvokeRequest``).
+    """
+
+    def request_approval(self, request: ApprovalRequest) -> ApprovalResult:
+        meta = request.metadata
+        if not isinstance(meta, dict):
+            return _default_required_approval(request)
+
+        raw = meta.get("approval_response")
+        if not isinstance(raw, dict):
+            return _default_required_approval(request)
+
+        status = str(raw.get("status", "")).strip().lower()
+        if status == ApprovalStatus.DENIED.value:
+            return ApprovalResult(
+                status=ApprovalStatus.DENIED,
+                reason=str(raw.get("reason") or "Approval denied."),
+            )
+        if status != ApprovalStatus.APPROVED.value:
+            return _default_required_approval(request)
+
+        optional_key = raw.get("idempotency_key")
+        if optional_key is not None and str(optional_key) != str(request.idempotency_key):
+            return ApprovalResult(
+                status=ApprovalStatus.DENIED,
+                reason="Approval idempotency key does not match transaction.",
+            )
+
+        approved_by = raw.get("approved_by")
+        reason = str(raw.get("reason") or "Approved via request metadata.")
         return ApprovalResult(
-            status=ApprovalStatus.REQUIRED,
-            reason=f"Human approval is required before signing {request.idempotency_key}.",
+            status=ApprovalStatus.APPROVED,
+            reason=reason,
+            approved_by=str(approved_by) if approved_by is not None else None,
         )
+
+
+def _default_required_approval(request: ApprovalRequest) -> ApprovalResult:
+    return ApprovalResult(
+        status=ApprovalStatus.REQUIRED,
+        reason=f"Human approval is required before signing {request.idempotency_key}.",
+    )
 
 
 class Web3TransactionBackend:
@@ -247,9 +293,14 @@ def _chain_name_for_id(chain_id: int) -> str:
 
 
 def _hex(value: Any) -> str:
+    """Normalize hashes and binary blobs to a ``0x``-prefixed hex string for API models."""
+
     if isinstance(value, HexBytes):
-        return value.hex()
-    if isinstance(value, bytes):
-        return HexBytes(value).hex()
-    text = str(value)
-    return text if text.startswith("0x") else f"0x{text}"
+        text = value.hex()
+    elif isinstance(value, bytes):
+        text = HexBytes(value).hex()
+    else:
+        text = str(value)
+    if text.startswith("0x"):
+        return text
+    return f"0x{text}"
