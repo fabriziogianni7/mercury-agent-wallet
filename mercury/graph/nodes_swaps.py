@@ -1,0 +1,103 @@
+"""LangGraph nodes for swap preparation before transaction execution."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+from pydantic import ValidationError
+
+from mercury.graph.responses import sanitize_error
+from mercury.graph.state import MercuryState
+from mercury.models.policy import PolicyDecision, PolicyDecisionStatus
+from mercury.models.swaps import SwapIntent
+from mercury.policy.swap_rules import SwapPolicyConfig
+from mercury.swaps.router import SwapRouter
+from mercury.tools.erc20_transactions import PublicAddressResolver
+from mercury.tools.evm import ProviderFactoryLike
+from mercury.tools.swaps import prepare_swap
+
+
+@dataclass(frozen=True)
+class SwapGraphDependencies:
+    """Dependencies required to prepare swaps before the Phase 6 pipeline."""
+
+    router: SwapRouter
+    provider_factory: ProviderFactoryLike
+    address_resolver: PublicAddressResolver
+    policy_config: SwapPolicyConfig = field(default_factory=SwapPolicyConfig)
+
+
+def make_swap_prepare_node(deps: SwapGraphDependencies) -> Callable[[MercuryState], MercuryState]:
+    """Create a node that converts a swap intent into the next safe transaction."""
+
+    def prepare_swap_transaction(state: MercuryState) -> MercuryState:
+        try:
+            intent = SwapIntent.model_validate(_swap_payload_from_state(state))
+            prepared = prepare_swap(
+                intent=intent,
+                router=deps.router,
+                provider_factory=deps.provider_factory,
+                address_resolver=deps.address_resolver,
+                policy_config=deps.policy_config,
+            )
+        except ValidationError as exc:
+            return {"error": _format_validation_error(exc)}
+        except Exception as exc:
+            return {"error": sanitize_error(exc)}
+
+        updates: MercuryState = {
+            "prepared_swap": prepared,
+            "chain_name": prepared.quote.request.chain,
+            "wallet_address": prepared.quote.request.wallet_address,
+        }
+        if prepared.next_transaction is not None:
+            updates["prepared_transaction"] = prepared.next_transaction
+            return updates
+
+        decision = prepared.execution_policy_decision or prepared.quote_policy_decision
+        if decision.status != PolicyDecisionStatus.REJECTED:
+            decision = PolicyDecision(
+                status=PolicyDecisionStatus.REJECTED,
+                reason="Swap did not produce a transaction for execution.",
+            )
+        updates["policy_decision"] = decision
+        return updates
+
+    return prepare_swap_transaction
+
+
+def route_swap_intent(state: MercuryState) -> str:
+    """Route structured swap intents to the swap builder."""
+
+    try:
+        payload = _swap_payload_from_state(state)
+    except ValueError:
+        return "unsupported_response"
+    if str(payload.get("kind", "")).lower() == "swap":
+        return "prepare_swap_transaction"
+    return "unsupported_response"
+
+
+def route_after_swap_prepare(state: MercuryState) -> str:
+    """Route swap preparation errors away from signing and broadcast."""
+
+    if state.get("error") or state.get("prepared_transaction") is None:
+        return "reject_transaction"
+    return "resolve_nonce"
+
+
+def _swap_payload_from_state(state: MercuryState) -> dict[str, Any]:
+    raw = state.get("parsed_intent", state.get("raw_input"))
+    if isinstance(raw, dict):
+        intent = raw.get("intent")
+        return intent if isinstance(intent, dict) else raw
+    raise ValueError("Swap graph requires a structured swap intent.")
+
+
+def _format_validation_error(exc: ValidationError) -> str:
+    first_error = exc.errors()[0]
+    location = ".".join(str(part) for part in first_error["loc"])
+    message = str(first_error["msg"])
+    return f"Invalid swap intent field '{location}': {message}."
