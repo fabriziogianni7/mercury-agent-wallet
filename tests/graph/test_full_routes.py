@@ -92,7 +92,8 @@ def test_full_graph_error_state_is_sanitized_when_serialized() -> None:
 
     assert "https://rpc.example.invalid" not in serialized
     assert "mercury/rpc/base" not in serialized
-    assert "required chain configuration is unavailable" in result["response_text"]
+    assert "I could not complete the read-only request" in result["response_text"]
+    assert "<redacted>" in result["response_text"]
 
 
 def _route_registry(*, raise_error: bool = False) -> Any:

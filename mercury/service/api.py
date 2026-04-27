@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, FastAPI, Header, Request
 
@@ -13,6 +13,7 @@ from mercury.graph.runtime import GraphRuntime
 from mercury.graph.state import MercuryState
 from mercury.models.approval import ApprovalStatus
 from mercury.models.chain import ChainConfig
+from mercury.models.errors import MercuryErrorInfo
 from mercury.models.execution import ExecutionResult
 from mercury.service.dependencies import get_graph_runtime
 from mercury.service.errors import GraphInvocationError, install_exception_handlers
@@ -26,6 +27,33 @@ from mercury.service.models import (
 )
 from mercury.service.pan_agentikit_handler import handle_agent_envelope
 from mercury.service.pan_agentikit_models import PanAgentEnvelope
+
+
+def _mercury_error_from_info(info: MercuryErrorInfo) -> MercuryError:
+    """Map domain error info to API `MercuryError` with redacted text and details."""
+
+    dumped = info.model_dump(mode="json")
+    safe = redact_value(dumped)
+    if not isinstance(safe, dict):
+        safe = {}
+    message = redact_error_message(str(safe.get("message", "")))
+    raw_details = safe.get("details")
+    if isinstance(raw_details, dict):
+        details = cast(dict[str, Any], redact_value(raw_details))
+    else:
+        details = {}
+    ua = safe.get("user_action")
+    la = safe.get("llm_action")
+    return MercuryError(
+        code=str(safe.get("code", "internal_error")),
+        category=str(safe.get("category", "internal")),
+        message=message,
+        retryable=bool(safe.get("retryable", False)),
+        recoverable=bool(safe.get("recoverable", True)),
+        user_action=redact_error_message(ua) if isinstance(ua, str) else None,
+        llm_action=redact_error_message(la) if isinstance(la, str) else None,
+        details=details,
+    )
 
 
 def create_app(
@@ -198,31 +226,33 @@ def _response_from_state(
         approval_required = _approval_required(approval)
         if approval_required:
             status = "approval_required"
-        message = execution.error or _message_for_status(status)
+        if execution.error is not None:
+            message = redact_error_message(execution.error.message)
+        else:
+            message = _message_for_status(status)
         return MercuryInvokeResponse(
             request_id=request_id,
             status=status,
             chain=execution.chain,
-            message=redact_error_message(message),
+            message=message,
             data={"execution_result": execution_payload},
             tx_hash=execution.tx_hash,
             receipt=_receipt_payload(execution),
             approval_required=approval_required,
             approval_payload=redact_value(approval) if approval_required else None,
-            error=MercuryError(message=redact_error_message(execution.error))
-            if execution.error
-            else None,
+            error=_mercury_error_from_info(execution.error) if execution.error else None,
         )
 
     if error is not None:
-        message = redact_error_message(error)
+        mercury_err = _mercury_error_from_info(error)
+        message = mercury_err.message
         return MercuryInvokeResponse(
             request_id=request_id,
             status="failed",
             chain=chain,
             message=message,
             data=safe_state,
-            error=MercuryError(message=message),
+            error=mercury_err,
         )
 
     message = _response_message(state)
@@ -270,9 +300,9 @@ def _approval_required(approval: dict[str, Any] | None) -> bool:
     return str(status) == ApprovalStatus.REQUIRED.value
 
 
-def _state_error(state: MercuryState) -> str | None:
-    error = state.get("error")
-    return str(error) if error else None
+def _state_error(state: MercuryState) -> MercuryErrorInfo | None:
+    err = state.get("error")
+    return err if isinstance(err, MercuryErrorInfo) else None
 
 
 def _response_message(state: MercuryState) -> str:

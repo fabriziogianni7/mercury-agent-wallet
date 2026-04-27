@@ -22,6 +22,23 @@ from mercury.models.erc20 import (
 from mercury.models.erc20 import (
     ERC20TransferIntent as ERC20TransferActionIntent,
 )
+from mercury.models.errors import (
+    MercuryErrorInfo,
+    approval_denied,
+    approval_required,
+    broadcast_failed,
+    idempotency_conflict,
+    internal_error,
+    missing_chain_config,
+    normalize_exception,
+    policy_rejected,
+    rpc_unavailable,
+    signing_failed,
+    simulation_failed,
+    unsupported_intent,
+    validation_failed,
+    validation_failed_from_pydantic,
+)
 from mercury.models.execution import (
     ExecutableTransaction,
     ExecutionResult,
@@ -71,6 +88,21 @@ from mercury.models.transactions import (
 from mercury.models.wallets import WalletAddressResult, WalletRef
 
 __all__ = [
+    "MercuryErrorInfo",
+    "approval_denied",
+    "approval_required",
+    "broadcast_failed",
+    "idempotency_conflict",
+    "internal_error",
+    "missing_chain_config",
+    "normalize_exception",
+    "policy_rejected",
+    "rpc_unavailable",
+    "signing_failed",
+    "simulation_failed",
+    "unsupported_intent",
+    "validation_failed",
+    "validation_failed_from_pydantic",
     "ChainConfig",
     "EVMAddress",
     "ExecutableTransaction",

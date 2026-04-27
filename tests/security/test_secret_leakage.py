@@ -105,6 +105,11 @@ def test_pan_agentikit_route_redacts_malicious_payload_and_graph_errors() -> Non
     assert_no_secret_values(response.text)
     payload = response.json()
     assert payload["payload"]["kind"] == "agent_error"
+    assert payload["payload"]["code"] == "graph_invocation_failed"
+    assert payload["payload"]["category"] == "internal"
+    assert payload["payload"]["llm_action"]
+    assert payload["error"]["code"] == "graph_invocation_failed"
+    assert_no_secret_values(payload["payload"]["llm_action"])
     assert payload["error"]["message"].count("<redacted>") >= 2
 
 

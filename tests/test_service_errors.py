@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from mercury.graph.state import MercuryState
+from mercury.models.errors import internal_error
 from mercury.service import create_app
 
 
@@ -21,6 +22,13 @@ def test_invoke_validation_error_rejects_malformed_wallet_id() -> None:
     payload = response.json()
     assert payload["status"] == "error"
     assert payload["message"] == "Request validation failed."
+    err = payload["error"]
+    assert err["code"] == "validation_failed"
+    assert err["category"] == "validation"
+    assert err["retryable"] is False
+    assert err["recoverable"] is True
+    assert isinstance(err["details"], list)
+    assert err["llm_action"]
     assert runtime.called is False
 
 
@@ -28,8 +36,11 @@ def test_invoke_redacts_secret_like_graph_state_errors() -> None:
     runtime = StaticRuntime(
         {
             "chain_name": "ethereum",
-            "error": (
-                "failed using https://rpc.example.invalid and mercury/wallets/primary/private_key"
+            "error": internal_error(
+                message=(
+                    "failed using https://rpc.example.invalid and "
+                    "mercury/wallets/primary/private_key"
+                ),
             ),
         }
     )
@@ -47,6 +58,9 @@ def test_invoke_redacts_secret_like_graph_state_errors() -> None:
 
     assert response.status_code == 200
     text = response.text
+    payload = response.json()
+    assert payload["error"]["code"] == "internal_error"
+    assert payload["error"]["category"] == "internal"
     assert "https://rpc.example.invalid" not in text
     assert "mercury/wallets/primary/private_key" not in text
     assert "<redacted>" in text
@@ -68,6 +82,9 @@ def test_invoke_graph_exception_maps_to_sanitized_error() -> None:
 
     assert response.status_code == 500
     text = response.text
+    payload = response.json()
+    assert payload["error"]["code"] == "graph_invocation_failed"
+    assert payload["error"]["category"] == "internal"
     assert "https://rpc.example.invalid" not in text
     assert "secret-token" not in text
     assert "<redacted>" in text

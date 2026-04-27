@@ -9,8 +9,8 @@ from typing import Any
 from pydantic import ValidationError
 
 from mercury.graph.request_metadata import merge_intent_metadata_into_prepared
-from mercury.graph.responses import sanitize_error
 from mercury.graph.state import MercuryState
+from mercury.models.errors import normalize_exception, validation_failed_from_pydantic
 from mercury.models.native_tx import NativeTransferIntent
 from mercury.tools.erc20_transactions import PublicAddressResolver
 from mercury.tools.native_transactions import prepare_native_transfer
@@ -41,9 +41,13 @@ def make_native_prepare_node(
                 idempotency_key=intent.idempotency_key,
             )
         except ValidationError as exc:
-            return {"error": _format_validation_error(exc)}
+            return {
+                "error": validation_failed_from_pydantic(
+                    exc, stage="prepare_native_transaction"
+                )
+            }
         except Exception as exc:
-            return {"error": sanitize_error(exc)}
+            return {"error": normalize_exception(exc, stage="prepare_native_transaction")}
 
         prepared = merge_intent_metadata_into_prepared(prepared, payload)
         return {
@@ -81,10 +85,3 @@ def _native_payload_from_state(state: MercuryState) -> dict[str, Any]:
         intent = raw.get("intent")
         return intent if isinstance(intent, dict) else raw
     raise ValueError("Native graph requires a structured transaction intent.")
-
-
-def _format_validation_error(exc: ValidationError) -> str:
-    first_error = exc.errors()[0]
-    location = ".".join(str(part) for part in first_error["loc"])
-    message = str(first_error["msg"])
-    return f"Invalid native transfer field '{location}': {message}."

@@ -7,6 +7,7 @@ from langgraph.graph.message import add_messages
 
 from mercury.models import ChainConfig, ChainReference, PolicyDecision, WalletIntent
 from mercury.models.approval import ApprovalResult
+from mercury.models.errors import MercuryErrorInfo
 from mercury.models.execution import ExecutableTransaction, ExecutionResult, PreparedTransaction
 from mercury.models.signing import SignedTransactionResult
 from mercury.models.simulation import SimulationResult
@@ -39,4 +40,4 @@ class MercuryState(TypedDict, total=False):
     tx_hash: str
     execution_result: ExecutionResult
     wallet_address: str
-    error: str
+    error: MercuryErrorInfo

@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 from mercury.graph.state import MercuryState
 from mercury.models import ExecutionResult, ExecutionStatus
 from mercury.models.approval import ApprovalResult, ApprovalStatus
+from mercury.models.errors import approval_required
 from mercury.service import create_app
 
 
@@ -55,7 +56,9 @@ def test_invoke_maps_approval_required_graph_result() -> None:
         chain_id=8453,
         wallet_id="primary",
         status=ExecutionStatus.APPROVAL_DENIED,
-        error="Human approval is required before signing idem-1.",
+        error=approval_required(
+            message="Human approval is required before signing idem-1.",
+        ),
     )
     approval = ApprovalResult(
         status=ApprovalStatus.REQUIRED,
@@ -80,7 +83,14 @@ def test_invoke_maps_approval_required_graph_result() -> None:
     assert payload["status"] == "approval_required"
     assert payload["approval_required"] is True
     assert payload["approval_payload"]["status"] == "required"
-    assert payload["error"]["message"] == "Human approval is required before signing idem-1."
+    err = payload["error"]
+    assert err["message"] == "Human approval is required before signing idem-1."
+    assert err["code"] == "approval_required"
+    assert err["category"] == "approval"
+    assert err["retryable"] is True
+    assert err["recoverable"] is True
+    assert err["user_action"]
+    assert err["llm_action"]
 
 
 def test_invoke_maps_transaction_success_result() -> None:

@@ -5,9 +5,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from mercury.graph.responses import sanitize_error
 from mercury.graph.state import MercuryState
 from mercury.models.approval import ApprovalStatus
+from mercury.models.errors import (
+    MercuryErrorInfo,
+    approval_denied,
+    idempotency_conflict,
+    internal_error,
+    normalize_exception,
+    policy_rejected,
+)
 from mercury.models.execution import (
     ExecutableTransaction,
     ExecutionResult,
@@ -70,7 +77,7 @@ def make_resolve_nonce_node(
                 "chain_name": prepared.chain,
             }
         except Exception as exc:
-            return {"error": sanitize_error(exc)}
+            return {"error": normalize_exception(exc, stage="resolve_nonce")}
 
     return resolve_nonce
 
@@ -103,7 +110,7 @@ def make_populate_gas_node(
             )
             return {"executable_transaction": executable}
         except Exception as exc:
-            return {"error": sanitize_error(exc)}
+            return {"error": normalize_exception(exc, stage="populate_gas")}
 
     return populate_gas
 
@@ -121,10 +128,11 @@ def make_simulate_transaction_node(
             simulation = deps.backend.simulate(executable)
             return {"simulation_result": simulation}
         except Exception as exc:
+            err = normalize_exception(exc, code="simulation_failed", stage="simulate_transaction")
             return {
                 "simulation_result": SimulationResult(
                     status=SimulationStatus.FAILED,
-                    reason=sanitize_error(exc),
+                    reason=err.message,
                 )
             }
 
@@ -144,7 +152,11 @@ def make_policy_node(deps: TransactionGraphDependencies) -> Callable[[MercurySta
             )
             return {"policy_decision": decision}
         except Exception as exc:
-            return {"policy_decision": _reject_decision(sanitize_error(exc))}
+            return {
+                "policy_decision": _reject_decision(
+                    normalize_exception(exc, stage="evaluate_policy")
+                )
+            }
 
     return evaluate_policy
 
@@ -165,17 +177,16 @@ def make_approval_node(
                     "execution_result": _result_from_state(
                         state,
                         status=ExecutionStatus.APPROVAL_DENIED,
-                        error=approval.reason,
+                        error=approval_denied(message=approval.reason, stage="request_approval"),
                     ),
                 }
             return {"approval_result": approval}
         except Exception as exc:
-            error = sanitize_error(exc)
             return {
                 "execution_result": _result_from_state(
                     state,
                     status=ExecutionStatus.APPROVAL_DENIED,
-                    error=error,
+                    error=normalize_exception(exc, stage="request_approval"),
                 )
             }
 
@@ -201,7 +212,7 @@ def make_idempotency_node(
                 "execution_result": _result_from_state(
                     state,
                     status=ExecutionStatus.REJECTED,
-                    error="Duplicate transaction is already in flight.",
+                    error=idempotency_conflict(stage="check_idempotency"),
                 )
             }
         except Exception as exc:
@@ -209,7 +220,7 @@ def make_idempotency_node(
                 "execution_result": _result_from_state(
                     state,
                     status=ExecutionStatus.REJECTED,
-                    error=sanitize_error(exc),
+                    error=normalize_exception(exc, stage="check_idempotency"),
                 )
             }
 
@@ -233,7 +244,7 @@ def make_sign_transaction_node(
                 "execution_result": _result_from_state(
                     state,
                     status=ExecutionStatus.FAILED,
-                    error=sanitize_error(exc),
+                    error=normalize_exception(exc, code="signing_failed", stage="sign_transaction"),
                 )
             }
 
@@ -256,7 +267,9 @@ def make_broadcast_transaction_node(
                 "execution_result": _result_from_state(
                     state,
                     status=ExecutionStatus.FAILED,
-                    error=sanitize_error(exc),
+                    error=normalize_exception(
+                        exc, code="broadcast_failed", stage="broadcast_transaction"
+                    ),
                 )
             }
 
@@ -289,7 +302,7 @@ def make_monitor_receipt_node(
                 state,
                 status=ExecutionStatus.FAILED,
                 tx_hash=state.get("tx_hash"),
-                error=sanitize_error(exc),
+                error=normalize_exception(exc, stage="monitor_receipt"),
             )
             return {"execution_result": result}
 
@@ -302,14 +315,21 @@ def reject_transaction(state: MercuryState) -> MercuryState:
     if state.get("execution_result") is not None:
         return {}
     decision = state.get("policy_decision")
-    reason = (
-        decision.reason if decision is not None else state.get("error", "Transaction rejected.")
-    )
+    if decision is not None:
+        err: MercuryErrorInfo = policy_rejected(message=decision.reason, stage="reject_transaction")
+    else:
+        raw = state.get("error")
+        if isinstance(raw, MercuryErrorInfo):
+            err = raw
+        elif raw is not None:
+            err = policy_rejected(message=str(raw), stage="reject_transaction")
+        else:
+            err = policy_rejected(message="Transaction rejected.", stage="reject_transaction")
     return {
         "execution_result": _result_from_state(
             state,
             status=ExecutionStatus.REJECTED,
-            error=reason,
+            error=err,
         )
     }
 
@@ -330,8 +350,9 @@ def _executable_from_state(state: MercuryState) -> ExecutableTransaction:
     return executable
 
 
-def _reject_decision(reason: str) -> PolicyDecision:
-    return PolicyDecision(status=PolicyDecisionStatus.REJECTED, reason=reason)
+def _reject_decision(reason: str | MercuryErrorInfo) -> PolicyDecision:
+    text = reason.message if isinstance(reason, MercuryErrorInfo) else reason
+    return PolicyDecision(status=PolicyDecisionStatus.REJECTED, reason=text)
 
 
 def _result_from_receipt(state: MercuryState, receipt: TransactionReceipt) -> ExecutionResult:
@@ -351,7 +372,7 @@ def _result_from_state(
     tx_hash: str | None = None,
     block_number: int | None = None,
     gas_used: int | None = None,
-    error: str | None = None,
+    error: MercuryErrorInfo | str | None = None,
 ) -> ExecutionResult:
     transaction = state.get("executable_transaction")
     prepared = state.get("prepared_transaction")
@@ -365,6 +386,14 @@ def _result_from_state(
         wallet_id = prepared.wallet_id
         chain_id = prepared.chain_id or chain_id
 
+    err_info: MercuryErrorInfo | None
+    if error is None:
+        err_info = None
+    elif isinstance(error, MercuryErrorInfo):
+        err_info = error
+    else:
+        err_info = internal_error(message=str(error), stage="execution_result")
+
     return ExecutionResult(
         chain=chain,
         chain_id=chain_id,
@@ -375,5 +404,5 @@ def _result_from_state(
         block_number=block_number,
         gas_used=gas_used,
         policy_decision=state.get("policy_decision"),
-        error=sanitize_error(error) if error is not None else None,
+        error=err_info,
     )

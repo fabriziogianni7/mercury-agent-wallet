@@ -9,13 +9,13 @@ from typing import Any
 from pydantic import ValidationError
 
 from mercury.graph.request_metadata import merge_intent_metadata_into_prepared
-from mercury.graph.responses import sanitize_error
 from mercury.graph.router import (
     ROUTE_REJECT_TRANSACTION,
     ROUTE_RESOLVE_NONCE,
     ROUTE_SWAP_TYPED_ORDER_READY,
 )
 from mercury.graph.state import MercuryState
+from mercury.models.errors import normalize_exception, validation_failed_from_pydantic
 from mercury.models.policy import PolicyDecision, PolicyDecisionStatus
 from mercury.models.swaps import SwapExecutionType, SwapIntent
 from mercury.policy.swap_rules import SwapPolicyConfig
@@ -50,9 +50,9 @@ def make_swap_prepare_node(deps: SwapGraphDependencies) -> Callable[[MercuryStat
                 policy_config=deps.policy_config,
             )
         except ValidationError as exc:
-            return {"error": _format_validation_error(exc)}
+            return {"error": validation_failed_from_pydantic(exc, stage="prepare_swap_transaction")}
         except Exception as exc:
-            return {"error": sanitize_error(exc)}
+            return {"error": normalize_exception(exc, stage="prepare_swap_transaction")}
 
         updates: MercuryState = {
             "prepared_swap": prepared,
@@ -133,10 +133,3 @@ def _swap_payload_from_state(state: MercuryState) -> dict[str, Any]:
         intent = raw.get("intent")
         return intent if isinstance(intent, dict) else raw
     raise ValueError("Swap graph requires a structured swap intent.")
-
-
-def _format_validation_error(exc: ValidationError) -> str:
-    first_error = exc.errors()[0]
-    location = ".".join(str(part) for part in first_error["loc"])
-    message = str(first_error["msg"])
-    return f"Invalid swap intent field '{location}': {message}."

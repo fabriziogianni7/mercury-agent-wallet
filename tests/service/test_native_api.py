@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from mercury.graph.state import MercuryState
 from mercury.models import ExecutionResult, ExecutionStatus
 from mercury.models.approval import ApprovalResult, ApprovalStatus
+from mercury.models.errors import approval_required
 from mercury.service import create_app
 
 
@@ -49,7 +50,9 @@ def test_native_api_preserves_approval_required_shape() -> None:
         chain_id=8453,
         wallet_id="primary",
         status=ExecutionStatus.APPROVAL_DENIED,
-        error="Human approval is required before signing idem-approval.",
+        error=approval_required(
+            message="Human approval is required before signing idem-approval.",
+        ),
     )
     approval = ApprovalResult(
         status=ApprovalStatus.REQUIRED,
@@ -77,12 +80,18 @@ def test_native_api_preserves_approval_required_shape() -> None:
     assert payload["status"] == "approval_required"
     assert payload["approval_required"] is True
     assert payload["approval_payload"]["status"] == "required"
+    err = payload["error"]
+    assert err["code"] == "approval_required"
+    assert err["category"] == "approval"
+    assert err["message"] == "Human approval is required before signing idem-approval."
 
 
 def test_native_api_sanitizes_runtime_exception() -> None:
     client = TestClient(
         create_app(
-            runtime=RaisingRuntime(RuntimeError("boom https://rpc.example.invalid api_key=secret"))
+            runtime=RaisingRuntime(
+                RuntimeError("boom https://rpc.example.invalid api_key=q9wz-leak-test")
+            )
         ),
         raise_server_exceptions=False,
     )
@@ -98,8 +107,11 @@ def test_native_api_sanitizes_runtime_exception() -> None:
     )
 
     assert response.status_code == 500
+    body = response.json()
+    assert body["error"]["code"] == "graph_invocation_failed"
+    assert body["error"]["category"] == "internal"
     assert "https://rpc.example.invalid" not in response.text
-    assert "secret" not in response.text
+    assert "q9wz-leak-test" not in response.text
     assert "<redacted>" in response.text
 
 

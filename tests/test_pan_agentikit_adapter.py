@@ -1,6 +1,7 @@
 from mercury.graph.state import MercuryState
 from mercury.models import ExecutionResult, ExecutionStatus
 from mercury.models.approval import ApprovalResult, ApprovalStatus
+from mercury.models.errors import approval_required, internal_error
 from mercury.service.pan_agentikit_handler import (
     handle_agent_envelope,
     mercury_request_from_envelope,
@@ -52,7 +53,9 @@ def test_value_moving_task_requires_idempotency_key() -> None:
 
     assert response.payload["kind"] == "agent_error"
     assert response.payload["code"] == "missing_idempotency_key"
+    assert response.payload["category"] == "policy"
     assert response.error is not None
+    assert response.error["category"] == "policy"
     assert response.trace_id == "trace-approval-1"
 
 
@@ -65,6 +68,7 @@ def test_unsupported_payload_returns_error_envelope_without_invoking_runtime() -
     assert runtime.invocations == []
     assert response.payload["kind"] == "agent_error"
     assert response.payload["code"] == "unsupported_payload"
+    assert response.payload["category"] == "intent"
     assert response.trace_id == "trace-unsupported-1"
     assert response.parent_step_id == "step-unsupported-1"
     assert response.from_role == "mercury"
@@ -77,7 +81,9 @@ def test_approval_required_result_maps_to_wallet_approval_payload() -> None:
         chain_id=8453,
         wallet_id="primary",
         status=ExecutionStatus.APPROVAL_DENIED,
-        error="Human approval is required before signing idem-transfer-1.",
+        error=approval_required(
+            message="Human approval is required before signing idem-transfer-1.",
+        ),
     )
     approval = ApprovalResult(
         status=ApprovalStatus.REQUIRED,
@@ -101,8 +107,11 @@ def test_graph_state_error_maps_to_sanitized_error_envelope() -> None:
     runtime = CapturingRuntime(
         {
             "chain_name": "base",
-            "error": (
-                "failed using https://rpc.example.invalid and mercury/wallets/primary/private_key"
+            "error": internal_error(
+                message=(
+                    "failed using https://rpc.example.invalid and "
+                    "mercury/wallets/primary/private_key"
+                )
             ),
         }
     )
@@ -111,7 +120,11 @@ def test_graph_state_error_maps_to_sanitized_error_envelope() -> None:
     response = handle_agent_envelope(envelope, graph_runtime=runtime)
 
     assert response.payload["kind"] == "agent_error"
+    assert response.payload["code"] == "internal_error"
+    assert response.payload["category"] == "internal"
     assert response.error is not None
+    assert response.error["code"] == "internal_error"
+    assert response.error["category"] == "internal"
     assert "https://rpc.example.invalid" not in response.error["message"]
     assert "mercury/wallets/primary/private_key" not in response.error["message"]
     assert "<redacted>" in response.error["message"]

@@ -96,7 +96,7 @@ def test_duplicate_in_flight_key_prevents_signing() -> None:
     result = graph.invoke({"raw_input": _prepared_transaction()})
 
     assert result["execution_result"].status == ExecutionStatus.REJECTED
-    assert "Duplicate transaction" in result["execution_result"].error
+    assert "Duplicate transaction" in result["execution_result"].error.message
     assert signer.sign_calls == 0
     assert "broadcast" not in events
 
@@ -116,7 +116,7 @@ def test_simulation_failure_rejects_before_approval_and_signing() -> None:
     result = graph.invoke({"raw_input": _prepared_transaction()})
 
     assert result["execution_result"].status == ExecutionStatus.REJECTED
-    assert "reverted" in result["execution_result"].error
+    assert "reverted" in result["execution_result"].error.message
     assert "approval" not in events
     assert signer.sign_calls == 0
 
