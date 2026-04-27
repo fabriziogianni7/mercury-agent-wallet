@@ -1,0 +1,24 @@
+# Secrets and local env (keep .env.example indexable)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+
+# OS / editor
+.DS_Store
+.vscode/
