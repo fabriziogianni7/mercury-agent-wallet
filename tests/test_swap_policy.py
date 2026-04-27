@@ -2,13 +2,20 @@ from datetime import UTC, datetime, timedelta
 
 from mercury.models.policy import PolicyDecisionStatus
 from mercury.models.swaps import (
+    SwapExecution,
+    SwapExecutionType,
     SwapProviderName,
     SwapQuote,
     SwapQuoteRequest,
     SwapRoute,
     SwapRouteKind,
+    SwapTypedOrder,
 )
-from mercury.policy.swap_rules import SwapPolicyConfig, evaluate_swap_quote_policy
+from mercury.policy.swap_rules import (
+    SwapPolicyConfig,
+    evaluate_swap_execution_policy,
+    evaluate_swap_quote_policy,
+)
 
 TOKEN_IN = "0x000000000000000000000000000000000000cafE"
 TOKEN_OUT = "0x000000000000000000000000000000000000dEaD"
@@ -64,6 +71,94 @@ def test_swap_policy_allows_bridge_when_allow_bridges_true() -> None:
         config=SwapPolicyConfig(allow_bridges=True),
     )
     assert decision.status == PolicyDecisionStatus.ALLOWED
+
+
+def test_swap_execution_policy_allows_cow_eip712_when_order_complete() -> None:
+    quote = _cow_quote()
+    execution = SwapExecution(
+        provider=SwapProviderName.COWSWAP,
+        execution_type=SwapExecutionType.EIP712_ORDER,
+        quote=quote,
+        order=SwapTypedOrder(
+            chain_id=8453,
+            typed_data={"domain": {"chainId": 8453}},
+            submit_url="https://api.cow.fi/base/api/v1/orders",
+        ),
+    )
+    decision = evaluate_swap_execution_policy(execution)
+    assert decision.status == PolicyDecisionStatus.NEEDS_APPROVAL
+
+
+def test_swap_execution_policy_rejects_non_cow_eip712() -> None:
+    quote = _quote()
+    execution = SwapExecution(
+        provider=SwapProviderName.LIFI,
+        execution_type=SwapExecutionType.EIP712_ORDER,
+        quote=quote,
+        order=SwapTypedOrder(
+            chain_id=8453,
+            typed_data={"x": 1},
+            submit_url="https://example.test/order",
+        ),
+    )
+    decision = evaluate_swap_execution_policy(execution)
+    assert decision.status == PolicyDecisionStatus.REJECTED
+    assert "signer" in decision.reason.lower() or "approval path" in decision.reason.lower()
+
+
+def test_swap_execution_policy_rejects_cow_eip712_without_submit_url() -> None:
+    quote = _cow_quote()
+    execution = SwapExecution(
+        provider=SwapProviderName.COWSWAP,
+        execution_type=SwapExecutionType.EIP712_ORDER,
+        quote=quote,
+        order=SwapTypedOrder(
+            chain_id=8453,
+            typed_data={"domain": {"chainId": 8453}},
+            submit_url=None,
+        ),
+    )
+    decision = evaluate_swap_execution_policy(execution)
+    assert decision.status == PolicyDecisionStatus.REJECTED
+
+
+def _cow_quote(
+    *,
+    slippage_bps: int = 50,
+    expires_at: datetime | None = None,
+    spender_address: str | None = SPENDER,
+) -> SwapQuote:
+    request = SwapQuoteRequest(
+        wallet_id="primary",
+        wallet_address=WALLET,
+        chain="base",
+        chain_id=8453,
+        from_token=TOKEN_IN,
+        to_token=TOKEN_OUT,
+        amount_in="1.5",
+        amount_in_raw=1_500_000,
+        max_slippage_bps=slippage_bps,
+        idempotency_key="swap-1",
+    )
+    return SwapQuote(
+        provider=SwapProviderName.COWSWAP,
+        request=request,
+        route=SwapRoute(
+            provider=SwapProviderName.COWSWAP,
+            route_id="route-1",
+            from_chain_id=8453,
+            to_chain_id=8453,
+            from_token=TOKEN_IN,
+            to_token=TOKEN_OUT,
+            spender_address=spender_address,
+        ),
+        amount_in_raw=1_500_000,
+        expected_amount_out_raw=1_000_000,
+        min_amount_out_raw=990_000,
+        slippage_bps=slippage_bps,
+        expires_at=expires_at or datetime.now(tz=UTC) + timedelta(minutes=5),
+        recipient_address=WALLET,
+    )
 
 
 def _quote(

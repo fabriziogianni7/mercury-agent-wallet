@@ -6,6 +6,7 @@ from mercury.graph.nodes_transaction import TransactionGraphDependencies
 from mercury.models import ExecutionStatus, GasFees, PreparedTransaction, SignedTransactionResult
 from mercury.models.approval import ApprovalRequest, ApprovalResult, ApprovalStatus
 from mercury.models.execution import ExecutableTransaction, TransactionReceipt
+from mercury.models.policy import PolicyDecisionStatus
 from mercury.models.signing import SignTransactionRequest
 from mercury.models.swaps import (
     SwapEVMTransaction,
@@ -15,6 +16,7 @@ from mercury.models.swaps import (
     SwapQuote,
     SwapQuoteRequest,
     SwapRoute,
+    SwapTypedOrder,
 )
 from mercury.models.wallets import WalletAddressResult
 from mercury.policy.idempotency import InMemoryIdempotencyStore
@@ -70,6 +72,21 @@ def test_swap_graph_prepares_approval_before_swap_when_allowance_is_insufficient
 
 def test_route_swap_intent_rejects_non_swap_payload() -> None:
     assert route_swap_intent({"raw_input": {"kind": "erc20_transfer"}}) == "unsupported_response"
+
+
+def test_swap_graph_resolves_typed_cow_order_without_evm_pipeline() -> None:
+    events: list[str] = []
+    signer = FakeSigner(events, expected_to=SWAP_TO)
+    graph = _cow_graph(events, signer, allowance=2_000_000)
+
+    result = graph.invoke({"raw_input": _swap_payload("cow-typed-1", provider="cowswap")})
+
+    assert result.get("prepared_transaction") is None
+    assert result["prepared_swap"].execution.execution_type == SwapExecutionType.EIP712_ORDER
+    pd = result.get("policy_decision")
+    assert pd is not None
+    assert pd.status == PolicyDecisionStatus.NEEDS_APPROVAL
+    assert "sign" not in events and "broadcast" not in events
 
 
 class FakeSwapProvider:
@@ -179,7 +196,48 @@ class FakeBackend:
         confirmations: int,
     ) -> TransactionReceipt:
         self._events.append("monitor")
-        return TransactionReceipt(tx_hash=tx_hash, status=ExecutionStatus.CONFIRMED)
+        return TransactionReceipt(tx_hash=tx_hash, status=ExecutionStatus.CONFIRMED        )
+
+
+class FakeCowSwapProvider:
+    name = SwapProviderName.COWSWAP
+
+    def __init__(self, events: list[str]) -> None:
+        self._events = events
+
+    def get_quote(self, request: SwapQuoteRequest) -> SwapQuote:
+        self._events.append("quote")
+        return SwapQuote(
+            provider=self.name,
+            request=request,
+            route=SwapRoute(
+                provider=self.name,
+                route_id="route-cow-1",
+                from_chain_id=request.chain_id,
+                to_chain_id=request.chain_id,
+                from_token=request.from_token,
+                to_token=request.to_token,
+                spender_address=SPENDER,
+            ),
+            amount_in_raw=request.amount_in_raw,
+            expected_amount_out_raw=1_000_000,
+            min_amount_out_raw=990_000,
+            slippage_bps=request.max_slippage_bps,
+            recipient_address=request.effective_recipient,
+        )
+
+    def build_execution(self, quote: SwapQuote) -> SwapExecution:
+        self._events.append("build")
+        return SwapExecution(
+            provider=self.name,
+            execution_type=SwapExecutionType.EIP712_ORDER,
+            quote=quote,
+            order=SwapTypedOrder(
+                chain_id=quote.request.chain_id,
+                typed_data={"domain": {"chainId": quote.request.chain_id}, "message": {}},
+                submit_url="https://api.cow.fi/base/api/v1/orders",
+            ),
+        )
 
 
 def _graph(events: list[str], signer: FakeSigner, *, allowance: int) -> Any:
@@ -210,7 +268,35 @@ def _graph(events: list[str], signer: FakeSigner, *, allowance: int) -> Any:
     ).compile()
 
 
-def _swap_payload(idempotency_key: str) -> dict[str, object]:
+def _cow_graph(events: list[str], signer: FakeSigner, *, allowance: int) -> Any:
+    factory = FakeProviderFactory(
+        FakeWeb3(
+            FakeEth(
+                contract_responses={
+                    ("decimals", ()): 6,
+                    ("symbol", ()): "USDC",
+                    ("allowance", (WALLET, SPENDER)): allowance,
+                }
+            )
+        )
+    )
+    return build_swap_transaction_graph(
+        SwapGraphDependencies(
+            router=SwapRouter([FakeCowSwapProvider(events)]),
+            provider_factory=factory,
+            address_resolver=signer,
+        ),
+        TransactionGraphDependencies(
+            backend=FakeBackend(events),
+            signer=signer,
+            policy_engine=TransactionPolicyEngine(),
+            approver=FakeApprover(events),
+            idempotency_store=InMemoryIdempotencyStore(),
+        ),
+    ).compile()
+
+
+def _swap_payload(idempotency_key: str, *, provider: str = "lifi") -> dict[str, object]:
     return {
         "kind": "swap",
         "chain": "base",
@@ -219,6 +305,6 @@ def _swap_payload(idempotency_key: str) -> dict[str, object]:
         "to_token": TOKEN_OUT,
         "amount_in": "1.5",
         "max_slippage_bps": 50,
-        "provider_preference": "lifi",
+        "provider_preference": provider,
         "idempotency_key": idempotency_key,
     }

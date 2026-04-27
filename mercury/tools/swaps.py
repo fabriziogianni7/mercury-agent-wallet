@@ -12,6 +12,7 @@ from mercury.models.swaps import (
     SwapExecution,
     SwapExecutionType,
     SwapIntent,
+    SwapProviderName,
     SwapQuote,
     SwapQuoteRequest,
 )
@@ -53,6 +54,7 @@ class PreparedSwap(BaseModel):
     allowance: SwapAllowanceCheck | None = None
     approval_transaction: PreparedTransaction | None = None
     swap_transaction: PreparedTransaction | None = None
+    order_submission_idempotency_key: str | None = None
 
     @property
     def next_transaction(self) -> PreparedTransaction | None:
@@ -147,6 +149,18 @@ def prepare_swap(
             quote_policy_decision=quote_decision,
             execution_policy_decision=execution_decision,
             allowance=allowance,
+        )
+    if (
+        execution.execution_type == SwapExecutionType.EIP712_ORDER
+        and execution.provider == SwapProviderName.COWSWAP
+    ):
+        return PreparedSwap(
+            quote=quote,
+            execution=execution,
+            quote_policy_decision=quote_decision,
+            execution_policy_decision=execution_decision,
+            allowance=allowance,
+            order_submission_idempotency_key=f"{quote.request.idempotency_key}:cow_order",
         )
     return PreparedSwap(
         quote=quote,

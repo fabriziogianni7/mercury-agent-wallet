@@ -129,11 +129,27 @@ def swap_execution_rejection_reason(execution: SwapExecution) -> str | None:
     if execution.execution_type == SwapExecutionType.UNSUPPORTED:
         return execution.unsupported_reason or "Swap execution is unsupported."
     if execution.execution_type == SwapExecutionType.EIP712_ORDER:
-        return "Swap typed order execution requires a dedicated signer approval path."
+        return _swap_cow_typed_order_rejection_reason(execution)
     if execution.transaction is None:
         return "Swap execution is missing an EVM transaction."
     if execution.transaction.chain_id != execution.quote.request.chain_id:
         return "Swap execution chain_id does not match quote chain."
+    return None
+
+
+def _swap_cow_typed_order_rejection_reason(execution: SwapExecution) -> str | None:
+    """EIP-712 is only allowed for CoW Swap with a complete typed order payload."""
+
+    if execution.provider != SwapProviderName.COWSWAP:
+        return "Swap typed order execution requires a dedicated signer approval path."
+    if execution.order is None:
+        return "CoW typed order execution is missing order metadata."
+    if execution.order.chain_id != execution.quote.request.chain_id:
+        return "CoW typed order chain_id does not match the quote request."
+    if not execution.order.typed_data:
+        return "CoW typed order is missing signing payload (typed data)."
+    if execution.order.submit_url is None or not str(execution.order.submit_url).strip():
+        return "CoW typed order is missing a submission URL."
     return None
 
 
