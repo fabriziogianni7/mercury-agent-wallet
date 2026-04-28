@@ -22,3 +22,4 @@ htmlcov/
 # OS/editor noise
 .DS_Store
 .vscode/
+curls.txt
