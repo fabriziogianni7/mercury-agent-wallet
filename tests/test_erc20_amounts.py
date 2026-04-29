@@ -1,5 +1,5 @@
 import pytest
-from mercury.models.amounts import format_units, parse_units
+from mercury.models.amounts import format_units, parse_integer_raw_amount, parse_units
 from mercury.models.erc20 import ERC20Amount
 from pydantic import ValidationError
 
@@ -29,3 +29,15 @@ def test_erc20_amount_rejects_mismatched_human_and_raw_amounts() -> None:
 
 def test_format_units_preserves_existing_decimal_behavior() -> None:
     assert format_units(2_500_000_000_000_000_000, 18) == "2.5"
+
+
+def test_parse_integer_raw_amount_strips_and_parses_digits() -> None:
+    assert parse_integer_raw_amount("  1000  ") == 1000
+    assert parse_integer_raw_amount("+0") == 0
+
+
+def test_parse_integer_raw_amount_rejects_fractional_or_empty() -> None:
+    with pytest.raises(ValueError, match="nonnegative integer"):
+        parse_integer_raw_amount("1.5")
+    with pytest.raises(ValueError, match="must not be empty"):
+        parse_integer_raw_amount("  ")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -33,6 +34,26 @@ def get_service_logger() -> logging.Logger:
     """Return Mercury's service logger."""
 
     return logging.getLogger("mercury.service")
+
+
+def configure_service_logging(*, level: int = logging.INFO) -> None:
+    """Ensure application loggers emit when the host only configures its own loggers.
+
+    Uvicorn's default ``LOGGING_CONFIG`` attaches handlers only to ``uvicorn.*`` loggers.
+    The root logger is left without handlers at WARNING, so INFO records from
+    ``mercury.service`` (and anything else that propagates to root) are discarded.
+    """
+
+    root = logging.getLogger()
+    if root.handlers:
+        if root.level > level:
+            root.setLevel(level)
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    root.addHandler(handler)
+    root.setLevel(level)
 
 
 def redact_value(value: Any) -> Any:
