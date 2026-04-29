@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Annotated, Any, cast
 
 from fastapi import Depends, FastAPI, Header, Request
+from fastapi.responses import Response
 
 from mercury.chains import list_chains
 from mercury.config import MercurySettings
@@ -32,6 +34,14 @@ from mercury.service.models import (
 )
 from mercury.service.pan_agentikit_handler import handle_agent_envelope
 from mercury.service.pan_agentikit_models import PanAgentEnvelope
+
+_INVOKE_AGENT_GUIDE_PATH = Path(__file__).resolve().parent / "MERCURY_AGENT_GUIDE.md"
+
+
+def _invoke_agent_guide_body() -> str:
+    """Load the Markdown guide for coordinators and autonomous agents."""
+
+    return _INVOKE_AGENT_GUIDE_PATH.read_text(encoding="utf-8")
 
 
 def _mercury_error_from_info(info: MercuryErrorInfo) -> MercuryError:
@@ -76,6 +86,7 @@ def create_app(
         app.state.graph_runtime = runtime
 
     install_exception_handlers(app)
+    app.add_middleware(MercuryHttpLoggingMiddleware)
 
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> HealthResponse:
@@ -90,6 +101,15 @@ def create_app(
             service=effective_settings.app_name,
             default_chain=effective_settings.default_chain,
             supported_chains=supported,
+        )
+
+    @app.get("/v1/mercury/invoke/guide")
+    def mercury_invoke_guide() -> Response:
+        """Return Markdown instructions for using ``POST /v1/mercury/invoke``."""
+
+        return Response(
+            content=_invoke_agent_guide_body(),
+            media_type="text/markdown; charset=utf-8",
         )
 
     @app.post("/v1/mercury/invoke", response_model=MercuryInvokeResponse)

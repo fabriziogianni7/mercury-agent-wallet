@@ -91,6 +91,7 @@ class ERC20TransferIntent(BaseModel):
     token_address: str = Field(min_length=1)
     recipient_address: str = Field(min_length=1)
     amount: str = Field(min_length=1)
+    amount_in_smallest_units: bool = False
     idempotency_key: str | None = Field(default=None, min_length=1)
 
     @field_validator("chain")
@@ -114,6 +115,7 @@ class ERC20ApprovalIntent(BaseModel):
     token_address: str = Field(min_length=1)
     spender_address: str = Field(min_length=1)
     amount: str = Field(min_length=1)
+    amount_in_smallest_units: bool = False
     idempotency_key: str | None = Field(default=None, min_length=1)
     spender_known: bool = False
     allow_unlimited: bool = False

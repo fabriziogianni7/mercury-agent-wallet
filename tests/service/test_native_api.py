@@ -8,6 +8,18 @@ from mercury.models.errors import approval_required
 from mercury.service import create_app
 
 
+def test_invoke_guide_returns_markdown() -> None:
+    runtime = CapturingRuntime({})
+    client = TestClient(create_app(runtime=runtime))
+
+    response = client.get("/v1/mercury/invoke/guide")
+
+    assert response.status_code == 200
+    assert "text/markdown" in response.headers.get("content-type", "")
+    assert response.text.startswith("# Mercury:")
+    assert "`POST /v1/mercury/invoke`" in response.text
+
+
 def test_native_api_health_ready_and_readonly_invoke_routes() -> None:
     runtime = CapturingRuntime(
         {
