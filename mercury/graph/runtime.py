@@ -1,15 +1,22 @@
-"""Fakeable runtime boundary for invoking Mercury graphs from services."""
+"""Fakeable runtime boundary for invoking Mercury graphs from services.
+
+LangSmith / LangChain tracing picks up RunnableConfig supplied to ``invoke`` / ``stream`` when
+``LANGSMITH_TRACING``, ``LANGSMITH_API_KEY`` (etc.) are configured in the environment.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Protocol, cast, runtime_checkable
 
+from mercury.config import MercurySettings, get_settings
 from mercury.graph.agent import (
     build_erc20_transaction_graph,
     build_graph,
     build_native_transaction_graph,
     build_swap_transaction_graph,
 )
+from mercury.graph.logging import log_graph_event
 from mercury.graph.nodes_erc20 import ERC20GraphDependencies
 from mercury.graph.nodes_native import NativeGraphDependencies
 from mercury.graph.nodes_swaps import SwapGraphDependencies
@@ -44,19 +51,62 @@ class MercuryGraphRuntime:
         erc20_graph: InvokableGraph,
         native_graph: InvokableGraph,
         swap_graph: InvokableGraph,
+        runtime_settings: MercurySettings | None = None,
     ) -> None:
         self._read_graph = read_graph
         self._erc20_graph = erc20_graph
         self._native_graph = native_graph
         self._swap_graph = swap_graph
+        self._runtime_settings = runtime_settings
 
     def invoke(self, state: MercuryState) -> MercuryState:
         """Invoke the graph that matches the request intent kind."""
 
-        graph = self._graph_for_state(state)
-        return cast(MercuryState, graph.invoke(state))
+        settings = self._runtime_settings if self._runtime_settings is not None else get_settings()
+        graph, graph_label = self._graph_selection_for_state(state)
+        config = self._runnable_config_for_state(state, graph_label)
+        rid = state.get("request_id")
+        request_id = rid if isinstance(rid, str) else ""
 
-    def _graph_for_state(self, state: MercuryState) -> InvokableGraph:
+        stream_fn = getattr(graph, "stream", None)
+
+        log_graph_event(
+            "graph_run_start",
+            request_id=request_id,
+            graph=graph_label,
+            intent_kind=_intent_kind_from_state(state),
+        )
+
+        if not settings.graph_node_logging or stream_fn is None:
+            result = graph.invoke(state, config=config)
+            return cast(MercuryState, result)
+
+        last_values: MercuryState | None = None
+        for mode, payload in stream_fn(
+            state,
+            stream_mode=["updates", "values"],
+            config=config,
+        ):
+            if mode == "updates" and isinstance(payload, dict):
+                for node_name, patch in payload.items():
+                    keys: list[str] = []
+                    if isinstance(patch, Mapping):
+                        keys = sorted(str(k) for k in patch.keys())
+                    log_graph_event(
+                        "graph_node_finished",
+                        request_id=request_id,
+                        graph=graph_label,
+                        node=node_name,
+                        state_keys=keys,
+                    )
+            elif mode == "values" and isinstance(payload, Mapping):
+                last_values = cast(MercuryState, dict(payload))
+
+        if last_values is None:
+            return cast(MercuryState, graph.invoke(state, config=config))
+        return last_values
+
+    def _graph_selection_for_state(self, state: MercuryState) -> tuple[InvokableGraph, str]:
         raw_input = state.get("raw_input")
         if isinstance(raw_input, dict):
             payload = raw_input.get("intent")
@@ -64,12 +114,46 @@ class MercuryGraphRuntime:
                 payload = raw_input
             kind = str(payload.get("kind", "")).strip().lower()
             if kind in {"erc20_transfer", "erc20_approval"}:
-                return self._erc20_graph
+                return self._erc20_graph, "erc20_transaction"
             if kind == "native_transfer":
-                return self._native_graph
+                return self._native_graph, "native_transaction"
             if kind == "swap":
-                return self._swap_graph
-        return self._read_graph
+                return self._swap_graph, "swap_transaction"
+        return self._read_graph, "read"
+
+    def _runnable_config_for_state(
+        self,
+        state: MercuryState,
+        graph_label: str,
+    ) -> dict[str, Any]:
+        """LangChain/LangSmith-friendly RunnableConfig additions."""
+
+        raw = state.get("request_id")
+        request_id = raw if isinstance(raw, str) and raw else "no-thread"
+        return {
+            "run_name": f"MercuryGraph.{graph_label}",
+            "tags": ["mercury", graph_label],
+            "metadata": {
+                "request_id": request_id,
+                "graph": graph_label,
+                "intent_kind": _intent_kind_from_state(state),
+            },
+            "configurable": {"thread_id": request_id},
+        }
+
+
+def _intent_kind_from_state(state: MercuryState) -> str:
+    raw_input = state.get("raw_input")
+    if isinstance(raw_input, dict):
+        payload = raw_input.get("intent")
+        if not isinstance(payload, dict):
+            payload = raw_input
+        kind_raw = payload.get("kind")
+        kind = str(kind_raw).strip().lower()
+        return kind if kind else "unset"
+    if isinstance(raw_input, str):
+        return "literal_text"
+    return "unset"
 
 
 def build_default_runtime(
@@ -79,6 +163,7 @@ def build_default_runtime(
     native_deps: NativeGraphDependencies,
     swap_deps: SwapGraphDependencies,
     transaction_deps: TransactionGraphDependencies,
+    runtime_settings: MercurySettings | None = None,
 ) -> MercuryGraphRuntime:
     """Build Mercury's default compiled graphs from injectable dependencies."""
 
@@ -87,4 +172,5 @@ def build_default_runtime(
         erc20_graph=build_erc20_transaction_graph(erc20_deps, transaction_deps).compile(),
         native_graph=build_native_transaction_graph(native_deps, transaction_deps).compile(),
         swap_graph=build_swap_transaction_graph(swap_deps, transaction_deps).compile(),
+        runtime_settings=runtime_settings,
     )

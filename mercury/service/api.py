@@ -19,7 +19,6 @@ from mercury.models.errors import MercuryErrorInfo
 from mercury.models.execution import ExecutionResult
 from mercury.service.dependencies import get_graph_runtime
 from mercury.service.errors import GraphInvocationError, install_exception_handlers
-from mercury.service.http_logging import MercuryHttpLoggingMiddleware
 from mercury.service.logging import (
     configure_service_logging,
     log_service_event,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -28,6 +29,68 @@ _URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
 _SECRET_PATH_PATTERN = re.compile(r"\bmercury/(?:rpc|apis|wallets)/[A-Za-z0-9_./-]+\b")
 _ONECLAW_TOKEN_PATTERN = re.compile(r"(?i)\b(?:oneclaw|1claw|api[_-]?key|bearer)\s*[:=]\s*\S+")
 _LONG_HEX_PATTERN = re.compile(r"\b0x[a-fA-F0-9]{96,}\b")
+
+_RESET = "\033[0m"
+_DIM = "\033[2m"
+
+_COLOR_BY_LEVELNO: dict[int, str] = {
+    logging.DEBUG: "\033[90m",
+    logging.INFO: "\033[36m",
+    logging.WARNING: "\033[33m",
+    logging.ERROR: "\033[31m",
+    logging.CRITICAL: "\033[35m",
+}
+
+_PLAIN_LINE = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+_PLAIN_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+
+def stderr_supports_color() -> bool:
+    """True when stderr is a TTY and NO_COLOR is unset (https://no-color.org/)."""
+
+    return bool(sys.stderr.isatty() and not os.environ.get("NO_COLOR"))
+
+
+class MercuryColoredFormatter(logging.Formatter):
+    """ANSI-colored single-line formatter; plain text when coloring is disabled."""
+
+    def __init__(self, *, use_color: bool) -> None:
+        super().__init__(fmt=_PLAIN_LINE, datefmt=_PLAIN_DATEFMT)
+        self._use_color = use_color
+        self._plain = logging.Formatter(fmt=_PLAIN_LINE, datefmt=_PLAIN_DATEFMT)
+
+    def format(self, record: logging.LogRecord) -> str:
+        plain = self._plain.format(record)
+        if not self._use_color:
+            return plain
+
+        parts = plain.split(" | ", 3)
+        if len(parts) != 4:
+            return plain
+        asctime_s, level_s, name_s, message_s = parts
+        color = _COLOR_BY_LEVELNO.get(record.levelno, _COLOR_BY_LEVELNO[logging.INFO])
+        return (
+            f"{_DIM}{asctime_s}{_RESET} | {color}{level_s}{_RESET} | "
+            f"{_DIM}{name_s}{_RESET} | {message_s}"
+        )
+
+
+def configure_service_logging(*, level: int = logging.INFO) -> None:
+    """Attach stderr handler with :class:`MercuryColoredFormatter` when the root has no handlers."""
+
+    root = logging.getLogger()
+    if root.handlers:
+        if root.level > level:
+            root.setLevel(level)
+        logging.getLogger("mercury.graph").setLevel(logging.NOTSET)
+        return
+
+    fmt_color = MercuryColoredFormatter(use_color=stderr_supports_color())
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setLevel(level)
+    handler.setFormatter(fmt_color)
+    root.addHandler(handler)
+    root.setLevel(level)
 
 
 def get_service_logger() -> logging.Logger:
