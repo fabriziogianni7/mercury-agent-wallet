@@ -49,6 +49,7 @@ def make_erc20_prepare_node(deps: ERC20GraphDependencies) -> Callable[[MercurySt
                     provider_factory=deps.provider_factory,
                     address_resolver=deps.address_resolver,
                     idempotency_key=transfer_intent.idempotency_key,
+                    amount_in_smallest_units=transfer_intent.amount_in_smallest_units,
                 )
             elif kind == "erc20_approval":
                 approval_intent = ERC20ApprovalIntent.model_validate(payload)
@@ -63,6 +64,7 @@ def make_erc20_prepare_node(deps: ERC20GraphDependencies) -> Callable[[MercurySt
                     idempotency_key=approval_intent.idempotency_key,
                     spender_known=approval_intent.spender_known,
                     allow_unlimited=approval_intent.allow_unlimited,
+                    amount_in_smallest_units=approval_intent.amount_in_smallest_units,
                 )
             else:
                 raise ValueError(f"Unsupported ERC20 transaction intent: {kind}.")

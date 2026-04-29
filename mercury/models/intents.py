@@ -70,6 +70,7 @@ class ERC20TransferIntent(BaseWalletIntent):
     token_address: Address
     recipient_address: Address
     amount: str = Field(min_length=1)
+    amount_in_smallest_units: bool = False
     idempotency_key: str | None = Field(default=None, min_length=1)
 
     @field_validator("chain")
@@ -92,6 +93,7 @@ class ERC20ApprovalIntent(BaseWalletIntent):
     token_address: Address
     spender_address: Address
     amount: str = Field(min_length=1)
+    amount_in_smallest_units: bool = False
     idempotency_key: str | None = Field(default=None, min_length=1)
     spender_known: bool = False
     allow_unlimited: bool = False

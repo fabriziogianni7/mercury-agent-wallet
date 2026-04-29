@@ -47,6 +47,32 @@ def test_prepare_erc20_transfer_builds_token_contract_call() -> None:
     assert tx.metadata["amount_raw"] == 1_500_000
 
 
+def test_prepare_erc20_transfer_accepts_smallest_unit_integer_string() -> None:
+    factory = _factory(
+        {
+            ("decimals", ()): 6,
+            ("symbol", ()): "USDC",
+            ("name", ()): "USD Coin",
+            ("balanceOf", (WALLET,)): 9_999_999,
+        }
+    )
+
+    tx = prepare_erc20_transfer(
+        chain="base",
+        wallet_id="primary",
+        token_address=TOKEN.lower(),
+        recipient_address=RECIPIENT.lower(),
+        amount="1500000",
+        amount_in_smallest_units=True,
+        provider_factory=factory,
+        address_resolver=FakeAddressResolver(),
+        idempotency_key="erc20-transfer-raw-1",
+    )
+
+    assert tx.metadata["amount_raw"] == 1_500_000
+    assert tx.metadata["amount"] == "1.5"
+
+
 def test_prepare_erc20_transfer_rejects_insufficient_balance() -> None:
     factory = _factory(
         {

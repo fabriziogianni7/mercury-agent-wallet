@@ -39,6 +39,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+per-file-ignores = {"scripts/**/*.py" = ["E402"]}
 
 [tool.mypy]
 python_version = "3.12"

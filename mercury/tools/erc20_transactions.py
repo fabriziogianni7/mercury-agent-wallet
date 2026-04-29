@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from web3 import Web3
 
 from mercury.models.addresses import normalize_evm_address
+from mercury.models.amounts import format_units, parse_integer_raw_amount
 from mercury.models.erc20 import MAX_UINT256, ZERO_ADDRESS, ERC20Action, ERC20Amount
 from mercury.models.execution import PreparedTransaction
 from mercury.models.wallets import WalletAddressResult
@@ -39,6 +40,26 @@ class ERC20TransferPreconditions(BaseModel):
     name: str | None = None
 
 
+def _erc20_amount_for_precondition(
+    amount: str,
+    decimals: int,
+    *,
+    amount_in_smallest_units: bool,
+) -> ERC20Amount:
+    """Build an amount from either a human decimal string or a raw integer string."""
+
+    if amount_in_smallest_units:
+        raw = parse_integer_raw_amount(amount)
+        if raw > MAX_UINT256:
+            raise ValueError("ERC20 raw amount must fit uint256.")
+        return ERC20Amount(
+            human_amount=format_units(raw, decimals),
+            decimals=decimals,
+            raw_amount=raw,
+        )
+    return ERC20Amount.from_human(amount, decimals)
+
+
 class ERC20ApprovalPreconditions(BaseModel):
     """Validated ERC20 approval precondition data."""
 
@@ -66,6 +87,7 @@ def check_erc20_transfer_preconditions(
     recipient_address: str,
     amount: str,
     provider_factory: ProviderFactoryLike,
+    amount_in_smallest_units: bool = False,
 ) -> ERC20TransferPreconditions:
     """Validate an ERC20 transfer and ensure the owner has enough token balance."""
 
@@ -81,7 +103,11 @@ def check_erc20_transfer_preconditions(
         token_address=normalized_token,
         provider_factory=provider_factory,
     )
-    token_amount = ERC20Amount.from_human(amount, metadata.decimals)
+    token_amount = _erc20_amount_for_precondition(
+        amount,
+        metadata.decimals,
+        amount_in_smallest_units=amount_in_smallest_units,
+    )
     if token_amount.raw_amount <= 0:
         raise ValueError("Transfer amount must be greater than zero.")
 
@@ -117,6 +143,7 @@ def check_erc20_approval_preconditions(
     provider_factory: ProviderFactoryLike,
     spender_known: bool = False,
     allow_unlimited: bool = False,
+    amount_in_smallest_units: bool = False,
 ) -> ERC20ApprovalPreconditions:
     """Validate an ERC20 approval and inspect the existing allowance."""
 
@@ -130,7 +157,12 @@ def check_erc20_approval_preconditions(
         token_address=normalized_token,
         provider_factory=provider_factory,
     )
-    token_amount = _approval_amount(amount, metadata.decimals, allow_unlimited=allow_unlimited)
+    token_amount = _approval_amount(
+        amount,
+        metadata.decimals,
+        allow_unlimited=allow_unlimited,
+        amount_in_smallest_units=amount_in_smallest_units,
+    )
     unlimited_approval = token_amount.raw_amount == MAX_UINT256
     if unlimited_approval and not allow_unlimited:
         raise ValueError("Unlimited ERC20 approvals are rejected by default.")
@@ -169,6 +201,7 @@ def prepare_erc20_transfer(
     provider_factory: ProviderFactoryLike,
     address_resolver: PublicAddressResolver,
     idempotency_key: str | None = None,
+    amount_in_smallest_units: bool = False,
 ) -> PreparedTransaction:
     """Prepare an unsigned ERC20 transfer transaction."""
 
@@ -180,6 +213,7 @@ def prepare_erc20_transfer(
         recipient_address=recipient_address,
         amount=amount,
         provider_factory=provider_factory,
+        amount_in_smallest_units=amount_in_smallest_units,
     )
     return _prepared_erc20_transaction(
         wallet_id=wallet_id,
@@ -218,6 +252,7 @@ def prepare_erc20_approval(
     idempotency_key: str | None = None,
     spender_known: bool = False,
     allow_unlimited: bool = False,
+    amount_in_smallest_units: bool = False,
 ) -> PreparedTransaction:
     """Prepare an unsigned ERC20 approve transaction."""
 
@@ -231,6 +266,7 @@ def prepare_erc20_approval(
         provider_factory=provider_factory,
         spender_known=spender_known,
         allow_unlimited=allow_unlimited,
+        amount_in_smallest_units=amount_in_smallest_units,
     )
     if preconditions.allowance_sufficient and preconditions.amount.raw_amount > 0:
         raise ValueError("Current allowance already satisfies requested ERC20 approval amount.")
@@ -283,8 +319,23 @@ def encode_erc20_approval_data(spender_address: str, raw_amount: int) -> str:
     return _encode_call("approve(address,uint256)", ["address", "uint256"], [spender, raw_amount])
 
 
-def _approval_amount(amount: str, decimals: int, *, allow_unlimited: bool) -> ERC20Amount:
+def _approval_amount(
+    amount: str,
+    decimals: int,
+    *,
+    allow_unlimited: bool,
+    amount_in_smallest_units: bool = False,
+) -> ERC20Amount:
     normalized = amount.strip().lower()
+    if amount_in_smallest_units and normalized not in {"max", "unlimited"}:
+        raw = parse_integer_raw_amount(amount)
+        if raw > MAX_UINT256:
+            raise ValueError("ERC20 raw amount must fit uint256.")
+        return ERC20Amount(
+            human_amount=format_units(raw, decimals),
+            decimals=decimals,
+            raw_amount=raw,
+        )
     if normalized in {"max", "unlimited"}:
         if not allow_unlimited:
             raise ValueError("Unlimited ERC20 approvals are rejected by default.")

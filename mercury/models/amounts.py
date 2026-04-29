@@ -72,6 +72,21 @@ def parse_units(amount: str, decimals: int) -> int:
     return int(raw)
 
 
+def parse_integer_raw_amount(amount: str) -> int:
+    """Parse a nonnegative integer decimal string used as ERC-20 raw/smallest-unit amount."""
+
+    candidate = amount.strip()
+    if not candidate:
+        raise ValueError("Amount must not be empty.")
+    if candidate.startswith("+"):
+        candidate = candidate[1:]
+    if not candidate.isdigit():
+        raise ValueError(
+            "Raw amount must be a nonnegative integer decimal string without fractional digits."
+        )
+    return int(candidate)
+
+
 class FormattedAmount(BaseModel):
     """Raw and human-readable representation of an EVM amount."""
 

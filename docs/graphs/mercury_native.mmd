@@ -1,0 +1,42 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	prepare_native_transaction(prepare_native_transaction)
+	unsupported_response(unsupported_response)
+	resolve_nonce(resolve_nonce)
+	populate_gas(populate_gas)
+	simulate_transaction(simulate_transaction)
+	evaluate_policy(evaluate_policy)
+	request_approval(request_approval)
+	check_idempotency(check_idempotency)
+	sign_transaction(sign_transaction)
+	broadcast_transaction(broadcast_transaction)
+	monitor_receipt(monitor_receipt)
+	reject_transaction(reject_transaction)
+	__end__([<p>__end__</p>]):::last
+	__start__ -.-> prepare_native_transaction;
+	__start__ -.-> unsupported_response;
+	broadcast_transaction --> monitor_receipt;
+	check_idempotency -.-> reject_transaction;
+	check_idempotency -.-> sign_transaction;
+	evaluate_policy -.-> check_idempotency;
+	evaluate_policy -.-> reject_transaction;
+	evaluate_policy -.-> request_approval;
+	populate_gas --> simulate_transaction;
+	prepare_native_transaction -.-> reject_transaction;
+	prepare_native_transaction -.-> resolve_nonce;
+	request_approval -.-> check_idempotency;
+	request_approval -.-> reject_transaction;
+	resolve_nonce --> populate_gas;
+	sign_transaction --> broadcast_transaction;
+	simulate_transaction --> evaluate_policy;
+	monitor_receipt --> __end__;
+	reject_transaction --> __end__;
+	unsupported_response --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

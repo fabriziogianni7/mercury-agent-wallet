@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Annotated, Any, cast
 
 from fastapi import Depends, FastAPI, Header, Request
+from fastapi.responses import Response
 
 from mercury.chains import list_chains
 from mercury.config import MercurySettings
@@ -17,7 +19,13 @@ from mercury.models.errors import MercuryErrorInfo
 from mercury.models.execution import ExecutionResult
 from mercury.service.dependencies import get_graph_runtime
 from mercury.service.errors import GraphInvocationError, install_exception_handlers
-from mercury.service.logging import log_service_event, redact_error_message, redact_value
+from mercury.service.http_logging import MercuryHttpLoggingMiddleware
+from mercury.service.logging import (
+    configure_service_logging,
+    log_service_event,
+    redact_error_message,
+    redact_value,
+)
 from mercury.service.models import (
     HealthResponse,
     MercuryError,
@@ -27,6 +35,14 @@ from mercury.service.models import (
 )
 from mercury.service.pan_agentikit_handler import handle_agent_envelope
 from mercury.service.pan_agentikit_models import PanAgentEnvelope
+
+_INVOKE_AGENT_GUIDE_PATH = Path(__file__).resolve().parent / "MERCURY_AGENT_GUIDE.md"
+
+
+def _invoke_agent_guide_body() -> str:
+    """Load the Markdown guide for coordinators and autonomous agents."""
+
+    return _INVOKE_AGENT_GUIDE_PATH.read_text(encoding="utf-8")
 
 
 def _mercury_error_from_info(info: MercuryErrorInfo) -> MercuryError:
@@ -64,12 +80,14 @@ def create_app(
     """Create the Mercury FastAPI app without touching external services."""
 
     effective_settings = settings or MercurySettings()
+    configure_service_logging()
     app = FastAPI(title=effective_settings.app_name)
     app.state.settings = effective_settings
     if runtime is not None:
         app.state.graph_runtime = runtime
 
     install_exception_handlers(app)
+    app.add_middleware(MercuryHttpLoggingMiddleware)
 
     @app.get("/healthz", response_model=HealthResponse)
     def healthz() -> HealthResponse:
@@ -84,6 +102,15 @@ def create_app(
             service=effective_settings.app_name,
             default_chain=effective_settings.default_chain,
             supported_chains=supported,
+        )
+
+    @app.get("/v1/mercury/invoke/guide")
+    def mercury_invoke_guide() -> Response:
+        """Return Markdown instructions for using ``POST /v1/mercury/invoke``."""
+
+        return Response(
+            content=_invoke_agent_guide_body(),
+            media_type="text/markdown; charset=utf-8",
         )
 
     @app.post("/v1/mercury/invoke", response_model=MercuryInvokeResponse)

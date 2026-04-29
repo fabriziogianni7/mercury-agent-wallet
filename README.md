@@ -203,6 +203,7 @@ they can be used by policy or the transaction pipeline.
 
 - `GET /healthz`
 - `GET /readyz`
+- `GET /v1/mercury/invoke/guide` — Markdown instructions for coordinators (source: `mercury/service/MERCURY_AGENT_GUIDE.md`)
 - `POST /v1/mercury/invoke`
 - `POST /v1/agent`
 
