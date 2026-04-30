@@ -22,8 +22,32 @@ BASE = ChainConfig(
     block_explorer_url="https://basescan.org",
 )
 
-_CHAINS_BY_NAME = {chain.name: chain for chain in (ETHEREUM, BASE)}
-_CHAINS_BY_ID = {chain.chain_id: chain for chain in (ETHEREUM, BASE)}
+ARBITRUM = ChainConfig(
+    name="arbitrum",
+    chain_id=42161,
+    native_symbol="ETH",
+    rpc_secret_path=_settings.arbitrum_rpc_secret_path,
+    block_explorer_url="https://arbiscan.io",
+)
+
+OPTIMISM = ChainConfig(
+    name="optimism",
+    chain_id=10,
+    native_symbol="ETH",
+    rpc_secret_path=_settings.optimism_rpc_secret_path,
+    block_explorer_url="https://optimistic.etherscan.io",
+)
+
+MONAD = ChainConfig(
+    name="monad",
+    chain_id=143,
+    native_symbol="MON",
+    rpc_secret_path=_settings.monad_rpc_secret_path,
+    block_explorer_url="https://monadvision.com",
+)
+
+_CHAINS_BY_NAME = {chain.name: chain for chain in (ETHEREUM, BASE, ARBITRUM, OPTIMISM, MONAD)}
+_CHAINS_BY_ID = {chain.chain_id: chain for chain in (ETHEREUM, BASE, ARBITRUM, OPTIMISM, MONAD)}
 
 
 class UnsupportedChainError(ValueError):

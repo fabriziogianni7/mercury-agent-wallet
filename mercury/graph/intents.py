@@ -19,6 +19,7 @@ class ReadOnlyIntentKind(StrEnum):
     ERC20_ALLOWANCE = "erc20_allowance"
     ERC20_METADATA = "erc20_metadata"
     CONTRACT_READ = "contract_read"
+    KNOWN_ADDRESS = "known_address"
     UNSUPPORTED = "unsupported"
 
 
@@ -119,6 +120,22 @@ class ContractReadIntent(BaseReadOnlyIntent):
         return normalize_evm_address(value)
 
 
+class KnownAddressIntent(BaseReadOnlyIntent):
+    """Resolve a ticker or protocol.deployment key via bundled JSON."""
+
+    kind: Literal[ReadOnlyIntentKind.KNOWN_ADDRESS] = ReadOnlyIntentKind.KNOWN_ADDRESS
+    category: Literal["token", "protocol"]
+    key: str = Field(min_length=1)
+
+    @field_validator("key")
+    @classmethod
+    def strip_key(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("key must not be empty.")
+        return stripped
+
+
 class UnsupportedIntent(BaseModel):
     """A non-executable intent with a user-safe reason."""
 
@@ -134,6 +151,7 @@ type ParsedIntent = (
     | ERC20AllowanceIntent
     | ERC20MetadataIntent
     | ContractReadIntent
+    | KnownAddressIntent
     | UnsupportedIntent
 )
 
@@ -143,6 +161,7 @@ _INTENT_MODELS: dict[ReadOnlyIntentKind, type[BaseReadOnlyIntent]] = {
     ReadOnlyIntentKind.ERC20_ALLOWANCE: ERC20AllowanceIntent,
     ReadOnlyIntentKind.ERC20_METADATA: ERC20MetadataIntent,
     ReadOnlyIntentKind.CONTRACT_READ: ContractReadIntent,
+    ReadOnlyIntentKind.KNOWN_ADDRESS: KnownAddressIntent,
 }
 
 _KIND_ALIASES = {
@@ -160,6 +179,9 @@ _KIND_ALIASES = {
     "token_metadata": ReadOnlyIntentKind.ERC20_METADATA,
     "read_contract": ReadOnlyIntentKind.CONTRACT_READ,
     "contract_read": ReadOnlyIntentKind.CONTRACT_READ,
+    "known_address": ReadOnlyIntentKind.KNOWN_ADDRESS,
+    "address_lookup": ReadOnlyIntentKind.KNOWN_ADDRESS,
+    "lookup_known_address": ReadOnlyIntentKind.KNOWN_ADDRESS,
 }
 
 _VALUE_MOVING_WORDS = (

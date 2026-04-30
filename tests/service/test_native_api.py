@@ -18,6 +18,7 @@ def test_invoke_guide_returns_markdown() -> None:
     assert "text/markdown" in response.headers.get("content-type", "")
     assert response.text.startswith("# Mercury:")
     assert "`POST /v1/mercury/invoke`" in response.text
+    assert "known_address" in response.text
 
 
 def test_native_api_health_ready_and_readonly_invoke_routes() -> None:
@@ -31,7 +32,13 @@ def test_native_api_health_ready_and_readonly_invoke_routes() -> None:
     client = TestClient(create_app(runtime=runtime))
 
     assert client.get("/healthz").status_code == 200
-    assert client.get("/readyz").json()["supported_chains"] == ["ethereum", "base"]
+    assert client.get("/readyz").json()["supported_chains"] == [
+        "ethereum",
+        "base",
+        "arbitrum",
+        "optimism",
+        "monad",
+    ]
 
     response = client.post(
         "/v1/mercury/invoke",

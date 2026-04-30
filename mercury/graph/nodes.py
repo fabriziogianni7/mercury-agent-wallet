@@ -149,6 +149,12 @@ def _tool_input_for_state(state: MercuryState) -> dict[str, Any]:
             "function_name": parsed_intent["function_name"],
             "args": parsed_intent.get("args", []),
         }
+    if intent_kind == ReadOnlyIntentKind.KNOWN_ADDRESS.value:
+        return {
+            **base,
+            "category": parsed_intent["category"],
+            "key": parsed_intent["key"],
+        }
 
     msg = f"Unsupported read-only intent kind: {intent_kind}."
     raise ValueError(msg)

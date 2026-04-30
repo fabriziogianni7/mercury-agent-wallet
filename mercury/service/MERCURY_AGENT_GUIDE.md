@@ -19,6 +19,35 @@ The OpenAPI document describes **request/response envelopes**. It does **not** e
 
 ---
 
+## Supported EVM chains
+
+`GET /readyz` returns `supported_chains` dynamically. Mercury currently recognises **ethereum** (chain id **1**), **base** (**8453**), **arbitrum** (**42161**), **optimism** (**10**), and **monad** (**143**). Each chain needs an RPC secret at its 1Claw path (defaults: `mercury/rpc/ethereum`, `mercury/rpc/base`, `mercury/rpc/arbitrum`, `mercury/rpc/optimism`, `mercury/rpc/monad`).
+
+CoW-backed swaps cover a subset (see README); Optimism swaps are typically routed via LiFi-compatible providers unless you extend CoW slugs locally.
+
+---
+
+## Known token / protocol catalog
+
+Bundled catalog: **`mercury/data/known_addresses.json`** (also loaded at runtime via `kind: known_address`). It maps **tier 1–3** tickers and **protocol** contracts per chain **when verified**. Entries are keyed by numeric `chain_id` as strings; `chain_name_to_id` repeats canonical names.
+
+- **Tier 1:** USDC, USDT, DAI, WBTC, WETH, LINK  
+- **Tier 2:** GHO, wstETH, rETH, SNX, USDe, sUSDe, crvUSD (only present on chains where deployed)  
+- **Tier 3:** EURC, cbETH; **OP** on Optimism; **ARB** on Arbitrum One  
+
+**Monad** may ship sparse or empty token lists until official deployments exist—do not assume L1 parity.
+
+**Protocol JSON keys (`category` = `protocol`, dot-separated keys):**
+
+- `AAVE_V3.pool_addresses_provider`, `AAVE_V3.pool` — Aave v3 periphery / pool proxies.  
+- `MORPHO.morpho_blue` — Morpho Blue core (currently a **checksum zero-address placeholder**; replace before relying on Morpho tooling).
+
+Treat the JSON/`known_address` result as authoritative for whichever keys exist **on that chain**. For `erc20_*`, `swap`, and `contract_read` you still pass **checksummed** `0x` addresses unless you resolved them first with **`known_address`**.
+
+Aliases for the same intent: **`address_lookup`**, **`lookup_known_address`**.
+
+---
+
 ## `POST /v1/mercury/invoke`
 
 **Content-Type:** `application/json`
@@ -51,7 +80,7 @@ Top-level fields (unknown top-level keys are **rejected** with HTTP 422):
 
 ### Read-only (no signing)
 
-Examples: `native_balance`, `erc20_balance`, `erc20_allowance`, `erc20_metadata`, `contract_read`.
+Examples: `native_balance`, `erc20_balance`, `erc20_allowance`, `erc20_metadata`, `contract_read`, `known_address`.
 
 These do **not** require idempotency or approval in the same way as transfers.
 
@@ -80,6 +109,25 @@ Requirements:
   }
 }
 ```
+
+---
+
+## Example: resolve bundled USDC address (read-only)
+
+```json
+{
+  "user_id": "user-1",
+  "wallet_id": "primary",
+  "chain": "ethereum",
+  "intent": {
+    "kind": "known_address",
+    "category": "token",
+    "key": "USDC"
+  }
+}
+```
+
+Use `category: protocol` plus keys such as **`AAVE_V3.pool`** for contract addresses referenced in simulations or `contract_read` calls.
 
 ---
 

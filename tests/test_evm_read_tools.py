@@ -176,4 +176,5 @@ def test_readonly_langchain_tools_are_created() -> None:
         "get_erc20_metadata",
         "get_erc20_balance",
         "get_erc20_allowance",
+        "resolve_known_address",
     }

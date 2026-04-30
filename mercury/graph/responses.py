@@ -51,6 +51,12 @@ def format_success_response(
             f"{tool_result['function_name']} returned {tool_result['result']!r} "
             f"on {tool_result['chain']}."
         )
+    if intent_kind == ReadOnlyIntentKind.KNOWN_ADDRESS.value:
+        return (
+            f"{tool_result['key']} ({tool_result['category']}) "
+            f"on chain_id={tool_result['chain_id']} {tool_result['chain']} "
+            f"resolves to {tool_result['address']}."
+        )
     return "Read-only request completed."
 
 

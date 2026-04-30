@@ -58,6 +58,17 @@ CONTRACT = "0x000000000000000000000000000000000000bEEF"
             "read_contract",
             "totalSupply returned 1000 on base",
         ),
+        (
+            {
+                "kind": "known_address",
+                "chain": "ethereum",
+                "category": "token",
+                "key": "USDC",
+            },
+            "resolve_known_address",
+            "USDC (token) on chain_id=1 ethereum resolves to "
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        ),
     ],
 )
 def test_readonly_graph_executes_each_full_route(
@@ -115,6 +126,14 @@ class RouteRegistry:
             return self._get_erc20_allowance(tool_input)
         if tool_name == "read_contract":
             return self._read_contract(tool_input)
+        if tool_name == "resolve_known_address":
+            from mercury.tools.known_address_tools import resolve_known_address
+
+            return resolve_known_address(
+                chain=tool_input["chain"],
+                category=tool_input["category"],  # type: ignore[arg-type]
+                key=tool_input["key"],
+            )
         raise ValueError(f"unexpected tool: {tool_name}")
 
     def _get_native_balance(self, tool_input: dict[str, Any]) -> dict[str, Any]:
