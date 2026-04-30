@@ -14,6 +14,7 @@ from mercury.graph.intents import (
     parse_readonly_intent,
 )
 from mercury.graph.state import MercuryState
+from mercury.known_addresses.book import KnownAddressMissingError, lookup_address
 from mercury.models.erc20 import ERC20ApprovalIntent, ERC20TransferIntent
 from mercury.models.errors import (
     MercuryErrorInfo,
@@ -139,7 +140,7 @@ def validate_invoke_intent(
         try:
             validated = model_cls.model_validate(merged)
         except ValidationError as exc:
-            return None, _validation_failed_from_pydantic_invoke(exc)
+            return None, _validation_failed_from_pydantic_invoke(exc, merged)
 
         canonical = validated.model_dump(mode="json")
         new_raw = merge_canonical_into_raw_input(raw, canonical)
@@ -149,10 +150,12 @@ def validate_invoke_intent(
         try:
             parsed = parse_readonly_intent(merged, None)
         except UnsupportedIntentError as exc:
-            return None, normalize_exception(exc, stage=_STAGE)
+            info_err = normalize_exception(exc, stage=_STAGE)
+            return None, _enrich_invoke_validation_error(info_err, merged)
 
         if isinstance(parsed, UnsupportedIntent):
-            return None, unsupported_intent(message=parsed.reason, stage=_STAGE)
+            info_u = unsupported_intent(message=parsed.reason, stage=_STAGE)
+            return None, _enrich_invoke_validation_error(info_u, merged)
 
         canonical = parsed.model_dump(mode="json")
         new_raw = merge_canonical_into_raw_input(raw, canonical)
@@ -170,13 +173,16 @@ def _extract_raw_blob(state: MercuryState | Mapping[str, Any]) -> Any:
     return state
 
 
-def _validation_failed_from_pydantic_invoke(exc: ValidationError) -> MercuryErrorInfo:
+def _validation_failed_from_pydantic_invoke(
+    exc: ValidationError, merged: dict[str, Any]
+) -> MercuryErrorInfo:
     info = validation_failed_from_pydantic(exc, stage=_STAGE)
     remediation = (
         "Compare your payload with the required fields for this intent kind "
         "(addresses, amounts, chain, wallet_id, and idempotency_key where applicable)."
     )
-    return info.model_copy(update={"details": {**info.details, "remediation": remediation}})
+    info = info.model_copy(update={"details": {**info.details, "remediation": remediation}})
+    return _enrich_invoke_validation_error(info, merged)
 
 
 def _success_state(
@@ -188,6 +194,157 @@ def _success_state(
         out["raw_input"] = merged_raw
         return cast(MercuryState, out)
     return cast(MercuryState, {"raw_input": merged_raw})
+
+
+def _enrich_invoke_validation_error(
+    info: MercuryErrorInfo,
+    merged: dict[str, Any],
+) -> MercuryErrorInfo:
+    """Attach orchestrator-facing remediation without changing MercuryError semantics."""
+
+    details = dict(info.details)
+    extras: dict[str, Any] = {}
+
+    merged_kind = str(merged.get("kind", "") or "").strip().lower()
+
+    abi_value = merged.get("abi_fragment")
+    if merged_kind == "contract_read" and isinstance(abi_value, str):
+        extras["abi_fragment_expected"] = "list[dict] (JSON ABI entries)"
+        extras["abi_fragment_example_balanceOf"] = [
+            {
+                "type": "function",
+                "name": "balanceOf",
+                "stateMutability": "view",
+                "inputs": [{"name": "account", "type": "address"}],
+                "outputs": [{"type": "uint256"}],
+            }
+        ]
+        extras["alternate_intent_suggestion"] = (
+            "For ERC-20 balances use ``kind: erc20_balance`` with ``token_address`` "
+            "and ``wallet_address``."
+        )
+
+    pyd_errors = (
+        errors
+        if isinstance((errors := details.get("errors")), list)
+        else None
+    )
+    if pyd_errors:
+        suggestion = _known_address_resolution_suggestion(pyd_errors, merged)
+        if suggestion is not None:
+            extras["known_address_catalog_suggestion"] = suggestion
+
+    if "known_address_catalog_suggestion" not in extras:
+        fallback = _known_address_resolution_from_merged_fields(merged)
+        if fallback is not None:
+            extras["known_address_catalog_suggestion"] = fallback
+
+    if not extras:
+        return info
+    merged_details = dict(details)
+    merged_details.update(extras)
+    return info.model_copy(update={"details": merged_details})
+
+
+def _looks_like_plain_symbol(raw: Any) -> bool:
+    """Heuristic ticker / symbol-ish token that is not hex."""
+
+    if not isinstance(raw, str):
+        return False
+    trimmed = raw.strip()
+    if not trimmed.isascii():
+        return False
+    if trimmed.lower().startswith("0x"):
+        return False
+    if trimmed.isdigit():
+        return False
+    letters = sum(1 for c in trimmed if c.isalpha())
+    if letters < 2:
+        return False
+    allowed = trimmed.replace("_", "")
+    return allowed.isalnum() and 3 <= len(allowed) <= 16
+
+
+_KNOWN_ADDRESS_TOKEN_FIELDS = (
+    "token_address",
+    "from_token",
+    "to_token",
+)
+
+
+def _known_address_resolution_from_merged_fields(
+    merged: dict[str, Any],
+) -> dict[str, Any] | None:
+    chain = merged.get("chain")
+    if not isinstance(chain, str) or not chain.strip():
+        return None
+    kind = str(merged.get("kind", "")).strip().lower()
+
+    synthetic: list[dict[str, Any]] = []
+    for field in _KNOWN_ADDRESS_TOKEN_FIELDS:
+        if kind == "erc20_balance" and field != "token_address":
+            continue
+        inp = merged.get(field)
+        if not _looks_like_plain_symbol(inp):
+            continue
+        synthetic.append({"loc": (field,), "input": inp})
+    if not synthetic:
+        return None
+    return _known_address_resolution_suggestion(synthetic, merged)
+
+
+def _known_address_resolution_suggestion(
+    errors: list[Any],
+    merged: dict[str, Any],
+) -> dict[str, Any] | None:
+    chain = merged.get("chain")
+    if not isinstance(chain, str) or not chain.strip():
+        return None
+
+    for entry in errors:
+        if not isinstance(entry, Mapping):
+            continue
+        parts = tuple(entry.get("loc", ()))
+        if not parts:
+            continue
+        field = str(parts[-1])
+        if field not in _KNOWN_ADDRESS_TOKEN_FIELDS:
+            continue
+        inp = entry.get("input")
+        if not _looks_like_plain_symbol(inp):
+            continue
+        try:
+            address = lookup_address(chain, "token", str(inp).strip())
+        except KnownAddressMissingError:
+            return {
+                "field": field,
+                "provided": str(inp).strip(),
+                "chain": chain.strip().lower(),
+                "message": (
+                    "`token_address`/token fields expect a checksummed 0x address. "
+                    "If ``{provided}`` is a ticker symbol, resolve it with ``kind: known_address`` "
+                    "(``category``: ``token``, ``key``: ``…``)."
+                ).format(**{"provided": str(inp).strip()}),
+            }
+
+        suggestion: dict[str, Any] = {
+            "field": field,
+            "provided": str(inp).strip(),
+            "resolved_checksum_address": address,
+            "chain": chain.strip().lower(),
+            "message": (
+                f"Interpreted `{inp}` as a token symbol → checksum address `{address}` on-catalog. "
+                f"Replace `{field}` with that `0x` address "
+                "(or resolve via ``kind: known_address``)."
+            ),
+        }
+        if field.startswith("token") or field in {"from_token", "to_token"}:
+            suggestion["intent_kind_tip"] = (
+                "erc20_balance for balances; swaps still require hex `token` addresses."
+            )
+        return suggestion
+
+    return None
 
 
 __all__ = [
