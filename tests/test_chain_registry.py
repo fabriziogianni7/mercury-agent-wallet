@@ -33,6 +33,14 @@ def test_resolves_base_by_chain_id() -> None:
     assert get_chain_by_id(8453).name == "base"
 
 
+def test_resolves_monad_by_chain_id() -> None:
+    chain = get_chain_by_id(143)
+
+    assert chain.name == "monad"
+    assert chain.native_symbol == "MON"
+    assert chain.rpc_secret_path == "mercury/rpc/monad"
+
+
 def test_unsupported_chain_raises_clear_error() -> None:
     with pytest.raises(UnsupportedChainError, match="Unsupported chain name 'polygon'"):
         get_chain_by_name("polygon")

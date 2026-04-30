@@ -24,6 +24,7 @@ from mercury.tools.evm import (
     get_native_balance,
     read_contract,
 )
+from mercury.tools.known_address_tools import create_known_address_tools
 from mercury.tools.registry import ReadOnlyToolRegistry
 from mercury.tools.schemas import (
     ContractReadInput,
@@ -52,6 +53,7 @@ def create_readonly_tools(provider_factory: ProviderFactoryLike) -> list[BaseToo
     return [
         *create_evm_tools(provider_factory),
         *create_erc20_tools(provider_factory),
+        *create_known_address_tools(),
     ]
 
 
@@ -75,6 +77,7 @@ __all__ = [
     "check_swap_allowance",
     "create_erc20_tools",
     "create_evm_tools",
+    "create_known_address_tools",
     "create_readonly_tools",
     "check_erc20_approval_preconditions",
     "check_erc20_transfer_preconditions",

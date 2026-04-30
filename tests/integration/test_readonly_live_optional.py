@@ -24,5 +24,5 @@ def test_optional_live_readonly_provider_factory_is_explicitly_gated() -> None:
 
     provider = factory.create(os.getenv("MERCURY_LIVE_READONLY_CHAIN", "ethereum"))
 
-    assert provider.chain.name in {"ethereum", "base"}
+    assert provider.chain.name in {"ethereum", "base", "arbitrum", "optimism", "monad"}
     assert provider.client.is_connected(show_traceback=False) in {True, False}

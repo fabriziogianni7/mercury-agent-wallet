@@ -1,9 +1,12 @@
 """Supported chain registry exports."""
 
 from mercury.chains.registry import (
+    ARBITRUM,
     BASE,
     DEFAULT_CHAIN_NAME,
     ETHEREUM,
+    MONAD,
+    OPTIMISM,
     UnsupportedChainError,
     get_chain_by_id,
     get_chain_by_name,
@@ -13,9 +16,12 @@ from mercury.chains.registry import (
 from mercury.chains.rpc import resolve_rpc_url
 
 __all__ = [
+    "ARBITRUM",
     "BASE",
     "DEFAULT_CHAIN_NAME",
     "ETHEREUM",
+    "MONAD",
+    "OPTIMISM",
     "UnsupportedChainError",
     "get_chain_by_id",
     "get_chain_by_name",

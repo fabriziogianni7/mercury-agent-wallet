@@ -78,7 +78,7 @@ class MercuryHttpLoggingMiddleware(BaseHTTPMiddleware):
 
         if _should_capture_response_body(response):
             chunks: list[bytes] = []
-            async for block in response.body_iterator:
+            async for block in response.body_iterator:  # type: ignore[attr-defined]
                 chunks.append(block)
             raw = b"".join(chunks)
             response_body = _parse_redacted_json_body(raw)

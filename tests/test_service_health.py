@@ -23,4 +23,10 @@ def test_readyz_uses_static_config_without_secret_fetches() -> None:
     payload = response.json()
     assert payload["status"] == "ready"
     assert payload["default_chain"] == "base"
-    assert payload["supported_chains"] == ["ethereum", "base"]
+    assert payload["supported_chains"] == [
+        "ethereum",
+        "base",
+        "arbitrum",
+        "optimism",
+        "monad",
+    ]

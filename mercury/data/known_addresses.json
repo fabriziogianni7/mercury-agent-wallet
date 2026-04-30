@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "notes": "MORPHO.morpho_blue is a placeholder (zero address) on all chains until curated deployments are added. Verify token addresses before mainnet use; omit or correct any entry you distrust.",
+  "chain_name_to_id": {
+    "ethereum": 1,
+    "base": 8453,
+    "arbitrum": 42161,
+    "optimism": 10,
+    "monad": 143
+  },
+  "chains": {
+    "1": {
+      "tokens": {
+        "USDC": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        "DAI": "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        "WBTC": "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+        "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        "LINK": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+        "GHO": "0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f",
+        "wstETH": "0x7F39C581F595B0CC94CbDE70a6B4e58EEF146138",
+        "rETH": "0xAE78736cd615F374d3085123A210448e74fC6392",
+        "SNX": "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F",
+        "USDe": "0x4c9Edd5852cD905F086c759E8383e09dfF1FfF8E",
+        "sUSDe": "0x9b39F34235C782d4f6e707A17B849dabF94beCc3",
+        "crvUSD": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+        "EURC": "0x1Abaea1f7c830Bd89AcCd63D978eE9aB8f5D5E5B",
+        "cbETH": "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704"
+      },
+      "protocols": {
+        "AAVE_V3": {
+          "pool_addresses_provider": "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e",
+          "pool": "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+        },
+        "MORPHO": {
+          "morpho_blue": "0x0000000000000000000000000000000000000000"
+        }
+      }
+    },
+    "8453": {
+      "tokens": {
+        "USDC": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "USDT": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+        "DAI": "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
+        "WBTC": "0x0555E30Da8F98308edB960aa94C0DBA30dd6B0c2",
+        "WETH": "0x4200000000000000000000000000000000000006",
+        "LINK": "0x88Fb150Bbc93A49575d920e23a9402E2c91D3C18",
+        "wstETH": "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+        "rETH": "0xb6fe221FE9eEf5aBa221c348Ba99A2D09ACEb19D",
+        "EURC": "0x60A39005d921D931d964B334bD4e9ECB00b92731",
+        "cbETH": "0x272a6E4D6fBc8D4EbE6fAfc93D6139d7Bce8d849"
+      },
+      "protocols": {
+        "AAVE_V3": {
+          "pool_addresses_provider": "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D",
+          "pool": "0xa238dD80C259A72E81D25c0dfF3B6D9c19B8c6f3"
+        },
+        "MORPHO": {
+          "morpho_blue": "0x0000000000000000000000000000000000000000"
+        }
+      }
+    },
+    "42161": {
+      "tokens": {
+        "USDC": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        "USDT": "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
+        "DAI": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+        "WBTC": "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f",
+        "WETH": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+        "LINK": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+        "GHO": "0x677F6484fcB5E7488042AF5dCFe413b38F9388Cd",
+        "wstETH": "0x5979D7b546e9038fC7f10d58A43D91b265B87848",
+        "rETH": "0xEC70Dcb4A1EFa46b8F2D97C310C9c4790ba5ffA8",
+        "SNX": "0xCbA56e55248D38DaA7D874c08426f65921484704",
+        "crvUSD": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+        "ARB": "0x912CE59144191C1204E64559FE8253a0e49E6548"
+      },
+      "protocols": {
+        "AAVE_V3": {
+          "pool_addresses_provider": "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
+          "pool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+        },
+        "MORPHO": {
+          "morpho_blue": "0x0000000000000000000000000000000000000000"
+        }
+      }
+    },
+    "10": {
+      "tokens": {
+        "USDC": "0x0b2c639c533813AB4FCa6D36533e9365af3daf6f",
+        "USDT": "0x94B008AA00579C13Bf263a176c224c74aAf5ffAd",
+        "DAI": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+        "WBTC": "0x68F180FCcEe6836688fcD8da20ffA843874bC260",
+        "WETH": "0x4200000000000000000000000000000000000006",
+        "LINK": "0x350a791BFC2c21FbC9D897b05D054C893992A557",
+        "SNX": "0x8700dAe30Bc7Bf4aFEC867BFd00A79dd32ccBd76",
+        "rETH": "0x9BceF72Be871E1C4A82d0653F02e34B733d9b47f",
+        "OP": "0x4200000000000000000000000000000000000042"
+      },
+      "protocols": {
+        "AAVE_V3": {
+          "pool_addresses_provider": "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
+          "pool": "0x794a61358D6845594F94dc1DB02A252b5b4814aD"
+        },
+        "MORPHO": {
+          "morpho_blue": "0x0000000000000000000000000000000000000000"
+        }
+      }
+    },
+    "143": {
+      "tokens": {},
+      "protocols": {
+        "AAVE_V3": {},
+        "MORPHO": {
+          "morpho_blue": "0x0000000000000000000000000000000000000000"
+        }
+      }
+    }
+  }
+}

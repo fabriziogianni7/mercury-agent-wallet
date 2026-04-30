@@ -27,6 +27,18 @@ class MercurySettings(BaseSettings):
         default="mercury/rpc/base",
         description="1Claw secret path for Base RPC.",
     )
+    arbitrum_rpc_secret_path: str = Field(
+        default="mercury/rpc/arbitrum",
+        description="1Claw secret path for Arbitrum One RPC.",
+    )
+    optimism_rpc_secret_path: str = Field(
+        default="mercury/rpc/optimism",
+        description="1Claw secret path for Optimism RPC.",
+    )
+    monad_rpc_secret_path: str = Field(
+        default="mercury/rpc/monad",
+        description="1Claw secret path for Monad RPC.",
+    )
 
     lifi_api_secret_path: str = Field(
         default="mercury/apis/lifi",
